@@ -5,11 +5,9 @@
 /build		构建项目的文件
 /include	头文件
 /src		源代码
-/src/...	子模块: IR, frontend, backend, opt, tools
+/src/...	子模块: IR, frontend, backend, opt
             third_party: 第三方库, 目前使用了 jsoncpp 用于生成和读取 json
-/docs       各种文档
-/examples   ###TODO 一些示例程序
-/examples/...
+/test       测试框架, 可以用于自测
 /CMakeList.txt
 /readme.txt	
 
@@ -34,9 +32,11 @@
 测试:
 1. cd /test
 2. python [files]:
-    build.py:   进入到 build 目录, 执行 cmake .. & make     ### TODO
-    
-    run.py: 运行可执行文件 compiler 编译所有测试用例, 打印 compiler 返回值和报错, 输出编译结果至 /test/out
+    build.py:   进入到 build 目录, 执行 cmake .. & make
+    run.py: 运行可执行文件 compiler 编译所有测试用例, 打印 compiler 返回值和报错, 输出编译结果至 /test/output
         执行方法: python run.py [s0/s1/s2/S]
-    
-    test.py: 将 run.py 生成的编译结果与标准结果进行对比并打分   ### TODO
+    score.py: 将 run.py 生成的编译结果与标准结果进行对比并打分
+        执行方法: python score.py [s0/s1/s2/S]
+
+    test.py 编译生成 compiler 可执行文件，执行并生成结果，最后对结果进行判断并打分
+        执行方法: python test.py [s0/s1/s2/S]

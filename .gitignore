@@ -14,6 +14,7 @@ script/*
 
 # test framework
 test/output/*
+test/__pycache__/*
 
 # third party lib src
 third_party
