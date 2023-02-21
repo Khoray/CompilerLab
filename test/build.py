@@ -9,11 +9,13 @@ def build_compiler():
         os.mkdir(bin_dir)
     else:
         shutil.rmtree(bin_dir)
+        os.mkdir(bin_dir)
 
     if not os.path.exists(build_dir):
         os.mkdir(build_dir)
     else:
         shutil.rmtree(build_dir)
+        os.mkdir(build_dir)
         
     if is_windows:
         os.system("cd ../build && cmake -G \"MinGW Makefiles\" .. && make") 
