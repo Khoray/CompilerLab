@@ -173,26 +173,21 @@
                                                    "value" : "+"
                                                 },
                                                 {
-                                                   "name" : "AddExp",
+                                                   "name" : "MulExp",
                                                    "subtree" : [
                                                       {
-                                                         "name" : "MulExp",
+                                                         "name" : "UnaryExp",
                                                          "subtree" : [
                                                             {
-                                                               "name" : "UnaryExp",
+                                                               "name" : "PrimaryExp",
                                                                "subtree" : [
                                                                   {
-                                                                     "name" : "PrimaryExp",
+                                                                     "name" : "Number",
                                                                      "subtree" : [
                                                                         {
-                                                                           "name" : "Number",
-                                                                           "subtree" : [
-                                                                              {
-                                                                                 "name" : "Terminal",
-                                                                                 "type" : "INTLTR",
-                                                                                 "value" : "5"
-                                                                              }
-                                                                           ]
+                                                                           "name" : "Terminal",
+                                                                           "type" : "INTLTR",
+                                                                           "value" : "5"
                                                                         }
                                                                      ]
                                                                   }

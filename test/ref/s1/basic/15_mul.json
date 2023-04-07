@@ -268,23 +268,18 @@
                                                    "value" : "*"
                                                 },
                                                 {
-                                                   "name" : "MulExp",
+                                                   "name" : "UnaryExp",
                                                    "subtree" : [
                                                       {
-                                                         "name" : "UnaryExp",
+                                                         "name" : "PrimaryExp",
                                                          "subtree" : [
                                                             {
-                                                               "name" : "PrimaryExp",
+                                                               "name" : "LVal",
                                                                "subtree" : [
                                                                   {
-                                                                     "name" : "LVal",
-                                                                     "subtree" : [
-                                                                        {
-                                                                           "name" : "Terminal",
-                                                                           "type" : "IDENFR",
-                                                                           "value" : "b"
-                                                                        }
-                                                                     ]
+                                                                     "name" : "Terminal",
+                                                                     "type" : "IDENFR",
+                                                                     "value" : "b"
                                                                   }
                                                                ]
                                                             }

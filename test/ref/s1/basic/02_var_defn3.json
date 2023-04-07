@@ -350,26 +350,21 @@
                                              "value" : "+"
                                           },
                                           {
-                                             "name" : "AddExp",
+                                             "name" : "MulExp",
                                              "subtree" : [
                                                 {
-                                                   "name" : "MulExp",
+                                                   "name" : "UnaryExp",
                                                    "subtree" : [
                                                       {
-                                                         "name" : "UnaryExp",
+                                                         "name" : "PrimaryExp",
                                                          "subtree" : [
                                                             {
-                                                               "name" : "PrimaryExp",
+                                                               "name" : "LVal",
                                                                "subtree" : [
                                                                   {
-                                                                     "name" : "LVal",
-                                                                     "subtree" : [
-                                                                        {
-                                                                           "name" : "Terminal",
-                                                                           "type" : "IDENFR",
-                                                                           "value" : "_c"
-                                                                        }
-                                                                     ]
+                                                                     "name" : "Terminal",
+                                                                     "type" : "IDENFR",
+                                                                     "value" : "_c"
                                                                   }
                                                                ]
                                                             }

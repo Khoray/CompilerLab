@@ -18,7 +18,7 @@ def build_compiler():
         os.mkdir(build_dir)
         
     if is_windows:
-        os.system("cd ../build && cmake -G \"MinGW Makefiles\" .. && make") 
+        os.system("cd ..\\build && cmake -G \"MinGW Makefiles\" .. && make") 
     else:
         os.system("cd ../build && cmake .. && make")
         

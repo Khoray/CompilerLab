@@ -226,32 +226,27 @@
                                                          "value" : "=="
                                                       },
                                                       {
-                                                         "name" : "EqExp",
+                                                         "name" : "RelExp",
                                                          "subtree" : [
                                                             {
-                                                               "name" : "RelExp",
+                                                               "name" : "AddExp",
                                                                "subtree" : [
                                                                   {
-                                                                     "name" : "AddExp",
+                                                                     "name" : "MulExp",
                                                                      "subtree" : [
                                                                         {
-                                                                           "name" : "MulExp",
+                                                                           "name" : "UnaryExp",
                                                                            "subtree" : [
                                                                               {
-                                                                                 "name" : "UnaryExp",
+                                                                                 "name" : "PrimaryExp",
                                                                                  "subtree" : [
                                                                                     {
-                                                                                       "name" : "PrimaryExp",
+                                                                                       "name" : "Number",
                                                                                        "subtree" : [
                                                                                           {
-                                                                                             "name" : "Number",
-                                                                                             "subtree" : [
-                                                                                                {
-                                                                                                   "name" : "Terminal",
-                                                                                                   "type" : "INTLTR",
-                                                                                                   "value" : "0"
-                                                                                                }
-                                                                                             ]
+                                                                                             "name" : "Terminal",
+                                                                                             "type" : "INTLTR",
+                                                                                             "value" : "0"
                                                                                           }
                                                                                        ]
                                                                                     }
@@ -724,23 +719,18 @@
                                                                                                                            "value" : "%"
                                                                                                                         },
                                                                                                                         {
-                                                                                                                           "name" : "MulExp",
+                                                                                                                           "name" : "UnaryExp",
                                                                                                                            "subtree" : [
                                                                                                                               {
-                                                                                                                                 "name" : "UnaryExp",
+                                                                                                                                 "name" : "PrimaryExp",
                                                                                                                                  "subtree" : [
                                                                                                                                     {
-                                                                                                                                       "name" : "PrimaryExp",
+                                                                                                                                       "name" : "LVal",
                                                                                                                                        "subtree" : [
                                                                                                                                           {
-                                                                                                                                             "name" : "LVal",
-                                                                                                                                             "subtree" : [
-                                                                                                                                                {
-                                                                                                                                                   "name" : "Terminal",
-                                                                                                                                                   "type" : "IDENFR",
-                                                                                                                                                   "value" : "b"
-                                                                                                                                                }
-                                                                                                                                             ]
+                                                                                                                                             "name" : "Terminal",
+                                                                                                                                             "type" : "IDENFR",
+                                                                                                                                             "value" : "b"
                                                                                                                                           }
                                                                                                                                        ]
                                                                                                                                     }
@@ -1272,131 +1262,116 @@
                                                                                                    "value" : "-"
                                                                                                 },
                                                                                                 {
-                                                                                                   "name" : "AddExp",
+                                                                                                   "name" : "MulExp",
                                                                                                    "subtree" : [
                                                                                                       {
-                                                                                                         "name" : "MulExp",
+                                                                                                         "name" : "UnaryExp",
                                                                                                          "subtree" : [
                                                                                                             {
-                                                                                                               "name" : "UnaryExp",
+                                                                                                               "name" : "PrimaryExp",
                                                                                                                "subtree" : [
                                                                                                                   {
-                                                                                                                     "name" : "PrimaryExp",
+                                                                                                                     "name" : "LVal",
                                                                                                                      "subtree" : [
                                                                                                                         {
-                                                                                                                           "name" : "LVal",
-                                                                                                                           "subtree" : [
-                                                                                                                              {
-                                                                                                                                 "name" : "Terminal",
-                                                                                                                                 "type" : "IDENFR",
-                                                                                                                                 "value" : "a"
-                                                                                                                              }
-                                                                                                                           ]
+                                                                                                                           "name" : "Terminal",
+                                                                                                                           "type" : "IDENFR",
+                                                                                                                           "value" : "a"
                                                                                                                         }
                                                                                                                      ]
                                                                                                                   }
                                                                                                                ]
-                                                                                                            },
+                                                                                                            }
+                                                                                                         ]
+                                                                                                      },
+                                                                                                      {
+                                                                                                         "name" : "Terminal",
+                                                                                                         "type" : "DIV",
+                                                                                                         "value" : "/"
+                                                                                                      },
+                                                                                                      {
+                                                                                                         "name" : "UnaryExp",
+                                                                                                         "subtree" : [
                                                                                                             {
-                                                                                                               "name" : "Terminal",
-                                                                                                               "type" : "DIV",
-                                                                                                               "value" : "/"
-                                                                                                            },
-                                                                                                            {
-                                                                                                               "name" : "MulExp",
+                                                                                                               "name" : "PrimaryExp",
                                                                                                                "subtree" : [
                                                                                                                   {
-                                                                                                                     "name" : "UnaryExp",
+                                                                                                                     "name" : "LVal",
                                                                                                                      "subtree" : [
                                                                                                                         {
-                                                                                                                           "name" : "PrimaryExp",
-                                                                                                                           "subtree" : [
-                                                                                                                              {
-                                                                                                                                 "name" : "LVal",
-                                                                                                                                 "subtree" : [
-                                                                                                                                    {
-                                                                                                                                       "name" : "Terminal",
-                                                                                                                                       "type" : "IDENFR",
-                                                                                                                                       "value" : "b"
-                                                                                                                                    }
-                                                                                                                                 ]
-                                                                                                                              }
-                                                                                                                           ]
+                                                                                                                           "name" : "Terminal",
+                                                                                                                           "type" : "IDENFR",
+                                                                                                                           "value" : "b"
                                                                                                                         }
                                                                                                                      ]
-                                                                                                                  },
+                                                                                                                  }
+                                                                                                               ]
+                                                                                                            }
+                                                                                                         ]
+                                                                                                      },
+                                                                                                      {
+                                                                                                         "name" : "Terminal",
+                                                                                                         "type" : "MULT",
+                                                                                                         "value" : "*"
+                                                                                                      },
+                                                                                                      {
+                                                                                                         "name" : "UnaryExp",
+                                                                                                         "subtree" : [
+                                                                                                            {
+                                                                                                               "name" : "PrimaryExp",
+                                                                                                               "subtree" : [
                                                                                                                   {
-                                                                                                                     "name" : "Terminal",
-                                                                                                                     "type" : "MULT",
-                                                                                                                     "value" : "*"
-                                                                                                                  },
-                                                                                                                  {
-                                                                                                                     "name" : "MulExp",
+                                                                                                                     "name" : "LVal",
                                                                                                                      "subtree" : [
                                                                                                                         {
-                                                                                                                           "name" : "UnaryExp",
+                                                                                                                           "name" : "Terminal",
+                                                                                                                           "type" : "IDENFR",
+                                                                                                                           "value" : "y"
+                                                                                                                        },
+                                                                                                                        {
+                                                                                                                           "name" : "Terminal",
+                                                                                                                           "type" : "LBRACK",
+                                                                                                                           "value" : "["
+                                                                                                                        },
+                                                                                                                        {
+                                                                                                                           "name" : "Exp",
                                                                                                                            "subtree" : [
                                                                                                                               {
-                                                                                                                                 "name" : "PrimaryExp",
+                                                                                                                                 "name" : "AddExp",
                                                                                                                                  "subtree" : [
                                                                                                                                     {
-                                                                                                                                       "name" : "LVal",
+                                                                                                                                       "name" : "MulExp",
                                                                                                                                        "subtree" : [
                                                                                                                                           {
-                                                                                                                                             "name" : "Terminal",
-                                                                                                                                             "type" : "IDENFR",
-                                                                                                                                             "value" : "y"
-                                                                                                                                          },
-                                                                                                                                          {
-                                                                                                                                             "name" : "Terminal",
-                                                                                                                                             "type" : "LBRACK",
-                                                                                                                                             "value" : "["
-                                                                                                                                          },
-                                                                                                                                          {
-                                                                                                                                             "name" : "Exp",
+                                                                                                                                             "name" : "UnaryExp",
                                                                                                                                              "subtree" : [
                                                                                                                                                 {
-                                                                                                                                                   "name" : "AddExp",
+                                                                                                                                                   "name" : "PrimaryExp",
                                                                                                                                                    "subtree" : [
                                                                                                                                                       {
-                                                                                                                                                         "name" : "MulExp",
+                                                                                                                                                         "name" : "Number",
                                                                                                                                                          "subtree" : [
                                                                                                                                                             {
-                                                                                                                                                               "name" : "UnaryExp",
-                                                                                                                                                               "subtree" : [
-                                                                                                                                                                  {
-                                                                                                                                                                     "name" : "PrimaryExp",
-                                                                                                                                                                     "subtree" : [
-                                                                                                                                                                        {
-                                                                                                                                                                           "name" : "Number",
-                                                                                                                                                                           "subtree" : [
-                                                                                                                                                                              {
-                                                                                                                                                                                 "name" : "Terminal",
-                                                                                                                                                                                 "type" : "INTLTR",
-                                                                                                                                                                                 "value" : "0"
-                                                                                                                                                                              }
-                                                                                                                                                                           ]
-                                                                                                                                                                        }
-                                                                                                                                                                     ]
-                                                                                                                                                                  }
-                                                                                                                                                               ]
+                                                                                                                                                               "name" : "Terminal",
+                                                                                                                                                               "type" : "INTLTR",
+                                                                                                                                                               "value" : "0"
                                                                                                                                                             }
                                                                                                                                                          ]
                                                                                                                                                       }
                                                                                                                                                    ]
                                                                                                                                                 }
                                                                                                                                              ]
-                                                                                                                                          },
-                                                                                                                                          {
-                                                                                                                                             "name" : "Terminal",
-                                                                                                                                             "type" : "RBRACK",
-                                                                                                                                             "value" : "]"
                                                                                                                                           }
                                                                                                                                        ]
                                                                                                                                     }
                                                                                                                                  ]
                                                                                                                               }
                                                                                                                            ]
+                                                                                                                        },
+                                                                                                                        {
+                                                                                                                           "name" : "Terminal",
+                                                                                                                           "type" : "RBRACK",
+                                                                                                                           "value" : "]"
                                                                                                                         }
                                                                                                                      ]
                                                                                                                   }
@@ -1756,32 +1731,27 @@
                                                          "value" : "{"
                                                       },
                                                       {
-                                                         "name" : "InitVal",
+                                                         "name" : "Exp",
                                                          "subtree" : [
                                                             {
-                                                               "name" : "Exp",
+                                                               "name" : "AddExp",
                                                                "subtree" : [
                                                                   {
-                                                                     "name" : "AddExp",
+                                                                     "name" : "MulExp",
                                                                      "subtree" : [
                                                                         {
-                                                                           "name" : "MulExp",
+                                                                           "name" : "UnaryExp",
                                                                            "subtree" : [
                                                                               {
-                                                                                 "name" : "UnaryExp",
+                                                                                 "name" : "PrimaryExp",
                                                                                  "subtree" : [
                                                                                     {
-                                                                                       "name" : "PrimaryExp",
+                                                                                       "name" : "Number",
                                                                                        "subtree" : [
                                                                                           {
-                                                                                             "name" : "Number",
-                                                                                             "subtree" : [
-                                                                                                {
-                                                                                                   "name" : "Terminal",
-                                                                                                   "type" : "INTLTR",
-                                                                                                   "value" : "1"
-                                                                                                }
-                                                                                             ]
+                                                                                             "name" : "Terminal",
+                                                                                             "type" : "INTLTR",
+                                                                                             "value" : "1"
                                                                                           }
                                                                                        ]
                                                                                     }
@@ -1876,32 +1846,27 @@
                                                          "value" : "{"
                                                       },
                                                       {
-                                                         "name" : "InitVal",
+                                                         "name" : "Exp",
                                                          "subtree" : [
                                                             {
-                                                               "name" : "Exp",
+                                                               "name" : "AddExp",
                                                                "subtree" : [
                                                                   {
-                                                                     "name" : "AddExp",
+                                                                     "name" : "MulExp",
                                                                      "subtree" : [
                                                                         {
-                                                                           "name" : "MulExp",
+                                                                           "name" : "UnaryExp",
                                                                            "subtree" : [
                                                                               {
-                                                                                 "name" : "UnaryExp",
+                                                                                 "name" : "PrimaryExp",
                                                                                  "subtree" : [
                                                                                     {
-                                                                                       "name" : "PrimaryExp",
+                                                                                       "name" : "Number",
                                                                                        "subtree" : [
                                                                                           {
-                                                                                             "name" : "Number",
-                                                                                             "subtree" : [
-                                                                                                {
-                                                                                                   "name" : "Terminal",
-                                                                                                   "type" : "INTLTR",
-                                                                                                   "value" : "1"
-                                                                                                }
-                                                                                             ]
+                                                                                             "name" : "Terminal",
+                                                                                             "type" : "INTLTR",
+                                                                                             "value" : "1"
                                                                                           }
                                                                                        ]
                                                                                     }
@@ -2311,23 +2276,18 @@
                                                                                        "value" : "%"
                                                                                     },
                                                                                     {
-                                                                                       "name" : "MulExp",
+                                                                                       "name" : "UnaryExp",
                                                                                        "subtree" : [
                                                                                           {
-                                                                                             "name" : "UnaryExp",
+                                                                                             "name" : "PrimaryExp",
                                                                                              "subtree" : [
                                                                                                 {
-                                                                                                   "name" : "PrimaryExp",
+                                                                                                   "name" : "LVal",
                                                                                                    "subtree" : [
                                                                                                       {
-                                                                                                         "name" : "LVal",
-                                                                                                         "subtree" : [
-                                                                                                            {
-                                                                                                               "name" : "Terminal",
-                                                                                                               "type" : "IDENFR",
-                                                                                                               "value" : "b"
-                                                                                                            }
-                                                                                                         ]
+                                                                                                         "name" : "Terminal",
+                                                                                                         "type" : "IDENFR",
+                                                                                                         "value" : "b"
                                                                                                       }
                                                                                                    ]
                                                                                                 }
@@ -2343,26 +2303,21 @@
                                                                                  "value" : "+"
                                                                               },
                                                                               {
-                                                                                 "name" : "AddExp",
+                                                                                 "name" : "MulExp",
                                                                                  "subtree" : [
                                                                                     {
-                                                                                       "name" : "MulExp",
+                                                                                       "name" : "UnaryExp",
                                                                                        "subtree" : [
                                                                                           {
-                                                                                             "name" : "UnaryExp",
+                                                                                             "name" : "PrimaryExp",
                                                                                              "subtree" : [
                                                                                                 {
-                                                                                                   "name" : "PrimaryExp",
+                                                                                                   "name" : "LVal",
                                                                                                    "subtree" : [
                                                                                                       {
-                                                                                                         "name" : "LVal",
-                                                                                                         "subtree" : [
-                                                                                                            {
-                                                                                                               "name" : "Terminal",
-                                                                                                               "type" : "IDENFR",
-                                                                                                               "value" : "b"
-                                                                                                            }
-                                                                                                         ]
+                                                                                                         "name" : "Terminal",
+                                                                                                         "type" : "IDENFR",
+                                                                                                         "value" : "b"
                                                                                                       }
                                                                                                    ]
                                                                                                 }
@@ -2391,23 +2346,18 @@
                                                          "value" : "%"
                                                       },
                                                       {
-                                                         "name" : "MulExp",
+                                                         "name" : "UnaryExp",
                                                          "subtree" : [
                                                             {
-                                                               "name" : "UnaryExp",
+                                                               "name" : "PrimaryExp",
                                                                "subtree" : [
                                                                   {
-                                                                     "name" : "PrimaryExp",
+                                                                     "name" : "LVal",
                                                                      "subtree" : [
                                                                         {
-                                                                           "name" : "LVal",
-                                                                           "subtree" : [
-                                                                              {
-                                                                                 "name" : "Terminal",
-                                                                                 "type" : "IDENFR",
-                                                                                 "value" : "b"
-                                                                              }
-                                                                           ]
+                                                                           "name" : "Terminal",
+                                                                           "type" : "IDENFR",
+                                                                           "value" : "b"
                                                                         }
                                                                      ]
                                                                   }
