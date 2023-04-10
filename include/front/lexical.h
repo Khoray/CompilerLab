@@ -19,7 +19,7 @@
 #ifndef LEXICAL_H
 #define LEXICAL_H
 
-#include"front\token.h"
+#include"front/token.h"
 
 #include<set>
 #include<vector>
