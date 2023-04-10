@@ -1,8 +1,7 @@
-import sys
+import sys,json
 from build import build_compiler
 from run import run_compiler
 from score import score_compiler
-
 
 assert(len(sys.argv) == 2)
 
@@ -22,4 +21,10 @@ build_compiler()
 print("------------  run_compiler  ------------")
 run_compiler(sys.argv[1])
 print("------------ score_compiler ------------")
-score_compiler(sys.argv[1])
+score = score_compiler(sys.argv[1])
+
+logfile = open("log.txt","w+")
+sys.stdout = logfile
+jval = json.loads({"score":score})
+print(json.dumps(jval))
+logfile.close()

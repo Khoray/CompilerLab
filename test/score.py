@@ -23,7 +23,7 @@ def score_compiler(arg1):
     ref_base = "./ref/" + arg1 + "/"
 
     score = 0
-    total = 0
+    total = 47      # FIXME 改成读取测试用例数而不是写死
 
     if step == "-s0":
         for i in ["basic", "function"]:
@@ -34,7 +34,6 @@ def score_compiler(arg1):
                 for file in files:
                     if not (file[-3:] == ".tk"):
                         continue
-                    total += 1
                     cmd = ' '.join(["diff", ref_dir + file, output_dir + file])
                     if is_windows:
                         cmd = cmd.replace('/','\\')
@@ -55,7 +54,6 @@ def score_compiler(arg1):
                 for file in files:
                     if not (file[-5:] == ".json"):
                         continue
-                    total += 1
                     cmd = ' '.join(["diff", ref_dir + file, output_dir + file])
                     if is_windows:
                         cmd = cmd.replace('/','\\')
@@ -69,10 +67,9 @@ def score_compiler(arg1):
         print("score:",score,"/",total)
     else:
         print("TODO")
-        exit()
+        # exit()
         
-    print(score*2)  # for PTA
-
+    return int(score/total)
 
 
 if __name__ == "__main__":
