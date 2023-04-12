@@ -1,14 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 project(compiler)
 
-# in our docker env, this can avoid cross compile problemes, if this is ur own linux or macos, should delete this
-if (UNIX) 
-    message("in docker env")
-    set(CMAKE_C_COMPILER    "/usr/bin/x86_64-linux-gnu-gcc-7")
-    set(CMAKE_CXX_COMPILER  "/usr/bin/x86_64-linux-gnu-g++-7")
-endif()
-
-
 # compile flags
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_FLAGS   "-g")                     # 调试信息
@@ -31,7 +23,8 @@ add_library(jsoncpp ./src/third_party/jsoncpp/jsoncpp.cpp)
 
 # build library
 # link libIR.a
-# link_directories(./lib)   FIXME 在docker下重新构建该库
+# u should rename libIR-x86-win.a or libIR-x86-linux.a to libIR.a according to ur own platform
+link_directories(./lib)
 # every src file directory should be compile into a lib
 aux_source_directory(./src/front FRONT_SRC)
 add_library(Front ${FRONT_SRC})

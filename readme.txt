@@ -7,6 +7,7 @@
 /src		源代码
 /src/...	子模块: IR, frontend, backend, opt
             third_party: 第三方库, 目前使用了 jsoncpp 用于生成和读取 json
+/lib        我们提供的库文件, 你需要根据你使用的 linux 或 windows 平台将对应的库文件重命名为 libIR.a 才能通过编译
 /test       测试框架, 可以用于自测
 /CMakeList.txt
 /readme.txt	
