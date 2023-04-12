@@ -34,9 +34,10 @@ def score_compiler(arg1):
                 for file in files:
                     if not (file[-3:] == ".tk"):
                         continue
-                    cmd = ' '.join(["diff", ref_dir + file, output_dir + file])
+                    cmd = ' '.join(["diff", ref_dir + file, output_dir + file, '-w'])
                     if is_windows:
                         cmd = cmd.replace('/','\\')
+                    # print(cmd)
                     cp = subprocess.run(cmd, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.PIPE)
                     if cp.returncode != 0:
                         record[file] = {"retval": cp.returncode, "err_detail": cp.stdout}
@@ -54,7 +55,7 @@ def score_compiler(arg1):
                 for file in files:
                     if not (file[-5:] == ".json"):
                         continue
-                    cmd = ' '.join(["diff", ref_dir + file, output_dir + file])
+                    cmd = ' '.join(["diff", ref_dir + file, output_dir + file, '-w'])
                     if is_windows:
                         cmd = cmd.replace('/','\\')
                     cp = subprocess.run(cmd, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.PIPE)
@@ -69,7 +70,7 @@ def score_compiler(arg1):
         print("TODO")
         # exit()
         
-    return int(score/total)
+    return int(score/total * 100)
 
 
 if __name__ == "__main__":
