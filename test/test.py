@@ -25,6 +25,5 @@ score = score_compiler(sys.argv[1])
 
 logfile = open("log.txt","w+")
 sys.stdout = logfile
-jval = json.loads({"score":score})
-print(json.dumps(jval))
+print(json.dumps({"score":str(score)}))
 logfile.close()
