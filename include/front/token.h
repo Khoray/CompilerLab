@@ -57,6 +57,7 @@ enum class TokenType{
     NEQ,		// !=
     AND,        // &&
     OR,         // ||
+    NOTTOKEN
 };
 std::string toString(TokenType);
 
