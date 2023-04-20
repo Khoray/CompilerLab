@@ -47,7 +47,6 @@ using frontend::TokenType;
 #define PARSE_TOKEN(tk_type) root->children.push_back(parseTerm(root, tk_type))
 #define PARSE(name, type) auto name = new type(root); assert(parse##type(name)); root->children.push_back(name); 
 
-
 Parser::Parser(const std::vector<frontend::Token>& tokens): index(0), token_stream(tokens) {}
 
 Parser::~Parser() {}
@@ -77,7 +76,7 @@ bool Parser::parseCompUnit(CompUnit* root) {
         PARSE(decl, Decl);
     }
 
-    if(index + 1 < (int) token_stream.size()) {
+    if(index + 1 < token_stream.size()) {
         PARSE(compUnit, CompUnit);
     }
 
@@ -647,8 +646,6 @@ bool Parser::parseConstExp(ConstExp* root) {
 
     return true;
 }
-
-
 
 void Parser::log(AstNode* node){
 #ifdef DEBUG_PARSER
