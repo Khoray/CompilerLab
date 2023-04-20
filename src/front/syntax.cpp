@@ -4,12 +4,46 @@
 #include<cassert>
 
 using frontend::Parser;
+using frontend::CompUnit;
+using frontend::AstNode;
+using frontend::Decl;
+using frontend::ConstDecl;
+using frontend::BType;
+using frontend::ConstDef;
+using frontend::ConstInitVal;
+using frontend::VarDecl;
+using frontend::VarDef;
+using frontend::InitVal;
+using frontend::FuncDef;
+using frontend::FuncType;
+using frontend::FuncFParam;
+using frontend::FuncFParams;
+using frontend::Block;
+using frontend::BlockItem;
+using frontend::Stmt;
+using frontend::Exp;
+using frontend::Cond;
+using frontend::LVal;
+using frontend::Number;
+using frontend::PrimaryExp;
+using frontend::UnaryExp;
+using frontend::UnaryOp;
+using frontend::FuncRParams;
+using frontend::MulExp;
+using frontend::AddExp;
+using frontend::RelExp;
+using frontend::EqExp;
+using frontend::LAndExp;
+using frontend::LOrExp;
+using frontend::ConstExp;
+using frontend::Term;
+using frontend::TokenType;
 
-// #define DEBUG_PARSER
+#define DEBUG_PARSER
 #define TODO assert(0 && "todo")
 #define CUR_TOKEN_IS(tk_type) (token_stream[index].type == tk_type)
-#define NEXT_TOKEN_IS(tk_type) (index + 1 < (int) token_stream.size() && token_stream[index + 1].type == tk_type)
-#define NEXT_NEXT_TOKEN_IS(tk_type) (index + 2 < (int) token_stream.size() && token_stream[index + 2].type == tk_type)
+#define NEXT_TOKEN_IS(tk_type) (index + 1 < token_stream.size() && token_stream[index + 1].type == tk_type)
+#define NEXT_NEXT_TOKEN_IS(tk_type) (index + 2 < token_stream.size() && token_stream[index + 2].type == tk_type)
 #define PARSE_TOKEN(tk_type) root->children.push_back(parseTerm(root, tk_type))
 #define PARSE(name, type) auto name = new type(root); assert(parse##type(name)); root->children.push_back(name); 
 
@@ -18,8 +52,18 @@ Parser::Parser(const std::vector<frontend::Token>& tokens): index(0), token_stre
 
 Parser::~Parser() {}
 
-frontend::CompUnit* Parser::get_abstract_syntax_tree(){
-    TODO;
+frontend::CompUnit* Parser::get_abstract_syntax_tree() {
+    CompUnit *root = new CompUnit();
+    parseCompUnit(root);
+    return root;
+}
+
+Term* Parser::parseTerm(AstNode* parent, TokenType expected) {
+    assert(token_stream[index].type == expected);
+    Term* ret = new Term(token_stream[index], parent);
+    log(ret);
+    index++;
+    return ret;
 }
 
 bool Parser::parseCompUnit(CompUnit* root) {
@@ -27,14 +71,14 @@ bool Parser::parseCompUnit(CompUnit* root) {
 
     if(NEXT_NEXT_TOKEN_IS(TokenType::LPARENT)) {
         // use CompUnit -> FuncDef
-        PARSE(FuncDef, FuncDef);
+        PARSE(funcdef, FuncDef);
     } else {
         // use FuncDef -> Decl
-        PARSE(Decl, Decl);
+        PARSE(decl, Decl);
     }
 
     if(index + 1 < (int) token_stream.size()) {
-        PARSE(CompUnit, CompUnit);
+        PARSE(compUnit, CompUnit);
     }
 
     return true;
@@ -45,10 +89,10 @@ bool Parser::parseDecl(Decl* root) {
 
     if(CUR_TOKEN_IS(TokenType::CONSTTK)) {
         // use Decl -> ConstDecl
-        PARSE(ConstDecl, ConstDecl);
+        PARSE(constDecl, ConstDecl);
     } else {
         // use Decl -> VarDecl;
-        PARSE(VarDecl, VarDecl);
+        PARSE(varDecl, VarDecl);
     }
 
     return true;
@@ -62,14 +106,14 @@ bool Parser::parseConstDecl(ConstDecl* root) {
     assert(CUR_TOKEN_IS(TokenType::CONSTTK)); // can delete
     PARSE_TOKEN(TokenType::CONSTTK);
 
-    PARSE(BType, BType);
+    PARSE(sType, BType);
 
-    PARSE(ConstDef1, ConstDef);
+    PARSE(constDef1, ConstDef);
 
     while(CUR_TOKEN_IS(TokenType::COMMA)) {
         PARSE_TOKEN(TokenType::COMMA);
 
-        PARSE(ConstDef2, ConstDef);
+        PARSE(constDef2, ConstDef);
     }
 
     assert(CUR_TOKEN_IS(TokenType::SEMICN));
@@ -103,14 +147,14 @@ bool Parser::parseConstDef(ConstDef* root) {
 
     while(CUR_TOKEN_IS(TokenType::LBRACK)) {
         PARSE_TOKEN(TokenType::LBRACK);
-        PARSE(ConstExp, ConstExp);
+        PARSE(constExp, ConstExp);
         PARSE_TOKEN(TokenType::RBRACK);
     }
 
     assert(CUR_TOKEN_IS(TokenType::ASSIGN));
     PARSE_TOKEN(TokenType::ASSIGN);
 
-    PARSE(ConstInitVal, ConstInitVal);
+    PARSE(constInitVal, ConstInitVal);
 
     return true;
 }
@@ -129,17 +173,17 @@ bool Parser::parseConstInitVal(ConstInitVal* root) {
 
         } else {
             // [ ConstInitVal { ',' ConstInitVal } ] is not empty
-            PARSE(ConstInitVal_out, ConstInitVal);
+            PARSE(constInitVal_out, ConstInitVal);
             while(CUR_TOKEN_IS(TokenType::COMMA)) {
                 PARSE_TOKEN(TokenType::COMMA);
-                PARSE(ConstInitVal_in, ConstInitVal);
+                PARSE(constInitVal_in, ConstInitVal);
             }
         }
         assert(CUR_TOKEN_IS(TokenType::RBRACE));
         PARSE_TOKEN(TokenType::RBRACE);
     } else {
         // use ConstInitVal -> ConstExp
-        PARSE(ConstExp, ConstExp);
+        PARSE(constExp, ConstExp);
     }
 
     return true;
@@ -149,12 +193,12 @@ bool Parser::parseVarDecl(VarDecl* root) {
     log(root);
     // only VarDecl -> BType VarDef { ',' VarDef } ';'
 
-    PARSE(BType, BType);
-    PARSE(VarDef_out, VarDef);
+    PARSE(sType, BType);
+    PARSE(varDef_out, VarDef);
 
     while(CUR_TOKEN_IS(TokenType::COMMA)) {
         PARSE_TOKEN(TokenType::COMMA);
-        PARSE(VarDef_in, VarDef);
+        PARSE(varDef_in, VarDef);
     }
 
     PARSE_TOKEN(TokenType::SEMICN);
@@ -169,13 +213,13 @@ bool Parser::parseVarDef(VarDef* root) {
     
     while(CUR_TOKEN_IS(TokenType::LBRACK)) {
         PARSE_TOKEN(TokenType::LBRACK);
-        PARSE(ConstExp, ConstExp);
+        PARSE(constExp, ConstExp);
         PARSE_TOKEN(TokenType::RBRACK);
     }
 
     if(CUR_TOKEN_IS(TokenType::ASSIGN)) {
         PARSE_TOKEN(TokenType::ASSIGN);
-        PARSE(InitVal, InitVal);
+        PARSE(initVal, InitVal);
     }
     return true;
 }
@@ -192,15 +236,16 @@ bool Parser::parseInitVal(InitVal* root) {
             //  [ InitVal { ',' InitVal } ] is empty
             // do nothing
         } else {
-            PARSE(InitVal_out, InitVal);
+            PARSE(initVal_out, InitVal);
             while(CUR_TOKEN_IS(TokenType::COMMA)) {
-                PARSE(InitVal_in, InitVal);
+                PARSE_TOKEN(TokenType::COMMA);
+                PARSE(initVal_in, InitVal);
             }
         }
         PARSE_TOKEN(TokenType::RBRACE);
     } else {
         // use InitVal -> Exp
-        PARSE(Exp, Exp);
+        PARSE(exp, Exp);
     }
     return true;
 }
@@ -209,7 +254,7 @@ bool Parser::parseFuncDef(FuncDef* root) {
     log(root);
 
     // only FuncDef -> FuncType Ident '(' [FuncFParams] ')' Block
-    PARSE(FuncType, FuncType);
+    PARSE(funcType, FuncType);
     PARSE_TOKEN(TokenType::IDENFR);
     PARSE_TOKEN(TokenType::LPARENT);
 
@@ -217,10 +262,10 @@ bool Parser::parseFuncDef(FuncDef* root) {
         // [FuncFParams] is empty
         // do nothing
     } else {
-        PARSE(FuncFParams, FuncFParams);
+        PARSE(funcFParams, FuncFParams);
     }
     PARSE_TOKEN(TokenType::RPARENT);
-    PARSE(Block, Block);
+    PARSE(slock, Block);
     return true;
 }
 
@@ -247,7 +292,7 @@ bool Parser::parseFuncFParam(FuncFParam* root) {
     log(root);
 
     // only FuncFParam -> BType Ident ['[' ']' { '[' Exp ']' }]
-    PARSE(BType, BType);
+    PARSE(sType, BType);
     PARSE_TOKEN(TokenType::IDENFR);
 
     if(CUR_TOKEN_IS(TokenType::LBRACK)) {
@@ -257,7 +302,7 @@ bool Parser::parseFuncFParam(FuncFParam* root) {
 
     while(CUR_TOKEN_IS(TokenType::LBRACK)) {
         PARSE_TOKEN(TokenType::LBRACK);
-        PARSE(Exp, Exp);
+        PARSE(exp, Exp);
         PARSE_TOKEN(TokenType::RBRACK);
     }
 
@@ -269,10 +314,10 @@ bool Parser::parseFuncFParams(FuncFParams* root) {
 
     // only FuncFParams -> FuncFParam { ',' FuncFParam }
 
-    PARSE(FuncFParam_out, FuncFParam);
+    PARSE(funcFParam_out, FuncFParam);
     while(CUR_TOKEN_IS(TokenType::COMMA)) {
         PARSE_TOKEN(TokenType::COMMA);
-        PARSE(FuncFParam_in, FuncFParam);
+        PARSE(funcFParam_in, FuncFParam);
     }
     return true;
 }
@@ -285,7 +330,7 @@ bool Parser::parseBlock(Block* root) {
     PARSE_TOKEN(TokenType::LBRACE);
     
     while(!CUR_TOKEN_IS(TokenType::RBRACE)) {
-        PARSE(BlockItem, BlockItem);
+        PARSE(slockItem, BlockItem);
     }
 
     PARSE_TOKEN(TokenType::RBRACE);
@@ -297,10 +342,10 @@ bool Parser::parseBlockItem(BlockItem* root) {
 
     if(CUR_TOKEN_IS(TokenType::CONSTTK) || CUR_TOKEN_IS(TokenType::INTTK) || CUR_TOKEN_IS(TokenType::FLOATTK)) {
         // use BlockItem -> Decl
-        PARSE(Decl, Decl);
+        PARSE(decl, Decl);
     } else {
         // use BlockItem -> Stmt
-        PARSE(Stmt, Stmt);
+        PARSE(stmt, Stmt);
     }
     return true;
 }
@@ -314,26 +359,26 @@ bool Parser::parseStmt(Stmt* root) {
 
     if(CUR_TOKEN_IS(TokenType::LBRACE)) {
         // use Stmt -> Block
-        PARSE(Block, Block);
+        PARSE(slock, Block);
     } else if(CUR_TOKEN_IS(TokenType::IFTK)) {
         // use Stmt -> 'if'
         PARSE_TOKEN(TokenType::IFTK);
         PARSE_TOKEN(TokenType::LPARENT);
-        PARSE(Cond, Cond);
+        PARSE(cond, Cond);
         PARSE_TOKEN(TokenType::RPARENT);
-        PARSE(Stmt, Stmt);
+        PARSE(stmt, Stmt);
         if(CUR_TOKEN_IS(TokenType::ELSETK)) {
             //  [ 'else' Stmt ] is not empty
             PARSE_TOKEN(TokenType::ELSETK);
-            PARSE(Stmt, Stmt);
+            PARSE(stmt, Stmt);
         }
     } else if(CUR_TOKEN_IS(TokenType::WHILETK)) {
         // use Stmt -> 'while'
         PARSE_TOKEN(TokenType::WHILETK);
         PARSE_TOKEN(TokenType::LPARENT);
-        PARSE(Cond, Cond);
+        PARSE(cond, Cond);
         PARSE_TOKEN(TokenType::RPARENT);
-        PARSE(Stmt, Stmt);
+        PARSE(stmt, Stmt);
     } else if(CUR_TOKEN_IS(TokenType::BREAKTK)) {
         // use Stmt -> 'break'
         PARSE_TOKEN(TokenType::BREAKTK);
@@ -347,7 +392,7 @@ bool Parser::parseStmt(Stmt* root) {
         PARSE_TOKEN(TokenType::RETURNTK);
         if(!CUR_TOKEN_IS(TokenType::SEMICN)) {
             // [Exp] is not empty
-            PARSE(Exp, Exp);
+            PARSE(exp, Exp);
         }
         PARSE_TOKEN(TokenType::SEMICN);
     } else if(CUR_TOKEN_IS(TokenType::SEMICN)) {
@@ -361,23 +406,24 @@ bool Parser::parseStmt(Stmt* root) {
         // exist ';' in both
         // search for next ';' and check whether exist '=' token
 
-        uint32_t assgin_token_pos = index;
+        uint32_t assign_token_pos = index;
         bool exist_assign_token = false;
-        while(assgin_token_pos < (int) token_stream.size() && token_stream[assign_token_pos].type != TokenType::SEMICN) {
+        while(assign_token_pos < token_stream.size() && token_stream[assign_token_pos].type != TokenType::SEMICN) {
             if(token_stream[assign_token_pos].type == TokenType::ASSIGN) {
                 exist_assign_token = true;
                 break;
             }
+            assign_token_pos++;
         }
         if(exist_assign_token) {
             // use Stmt -> LVal '=' Exp ';'
-            PARSE(LVal, LVal);
+            PARSE(lVal, LVal);
             PARSE_TOKEN(TokenType::ASSIGN);
-            PARSE(Exp, Exp);
+            PARSE(exp, Exp);
             PARSE_TOKEN(TokenType::SEMICN);
         } else {
             // use Stmt -> Exp ';'
-            PARSE(Exp, Exp);
+            PARSE(exp, Exp);
             PARSE_TOKEN(TokenType::SEMICN);
         }
     }
@@ -388,7 +434,7 @@ bool Parser::parseExp(Exp* root) {
     log(root);
 
     // only Exp -> AddExp
-    PARSE(AddExp, AddExp);
+    PARSE(addExp, AddExp);
 
     return true;
 }
@@ -397,61 +443,209 @@ bool Parser::parseCond(Cond* root) {
     log(root);
     // only Cond -> LOrExp
 
-    PARSE(LOrExp, LOrExp);
+    PARSE(lOrExp, LOrExp);
 
     return true;
 }
 
 bool Parser::parseLVal(LVal* root) {
     log(root);
+
+    // only LVal -> Ident {'[' Exp ']'}
+    PARSE_TOKEN(TokenType::IDENFR);
+    while(CUR_TOKEN_IS(TokenType::LBRACK)) {
+        PARSE_TOKEN(TokenType::LBRACK);
+        PARSE(exp, Exp);
+        PARSE_TOKEN(TokenType::RBRACK);
+    }
+    return true;
 }
 
 bool Parser::parseNumber(Number* root) {
-    TODO;
+    log(root);
+
+    if(CUR_TOKEN_IS(TokenType::INTLTR)) {
+        // use Number -> IntConst
+        PARSE_TOKEN(TokenType::INTLTR);
+    } else if(CUR_TOKEN_IS(TokenType::FLOATLTR)) {
+        // use Number -> floatConst
+        PARSE_TOKEN(TokenType::FLOATLTR);
+    } else {
+        assert(0 && "invalid token type");
+    }
+    return true;
 }
 
 bool Parser::parsePrimaryExp(PrimaryExp* root) {
-    TODO;
+    log(root);
+    // PrimaryExp -> '(' Exp ')' | LVal | Number
+    if(CUR_TOKEN_IS(TokenType::LPARENT)) {
+        // use PrimaryExp -> '(' Exp ')'
+        PARSE_TOKEN(TokenType::LPARENT);
+        PARSE(exp, Exp);
+        PARSE_TOKEN(TokenType::RPARENT);
+    } else if(CUR_TOKEN_IS(TokenType::IDENFR)) {
+        // use PrimaryExp -> LVal
+        PARSE(lVal, LVal);
+    } else if(CUR_TOKEN_IS(TokenType::INTLTR) || CUR_TOKEN_IS(TokenType::FLOATLTR)) {
+        // use PrimaryExp -> Number
+        PARSE(number, Number);
+    }
+
+    return true;
 }
 
 bool Parser::parseUnaryExp(UnaryExp* root) {
-    TODO;
+    log(root);
+    // UnaryExp -> PrimaryExp | Ident '(' [FuncRParams] ')' | UnaryOp UnaryExp
+
+    if(CUR_TOKEN_IS(TokenType::IDENFR) && NEXT_TOKEN_IS(TokenType::LPARENT)) {
+        // use UnaryExp -> Ident '(' [FuncRParams] ')'
+        PARSE_TOKEN(TokenType::IDENFR);
+        PARSE_TOKEN(TokenType::LPARENT);
+
+        if(!CUR_TOKEN_IS(TokenType::RPARENT)) {
+            // [FuncRParams] is not empty
+            PARSE(funcRParams, FuncRParams);
+        }
+        PARSE_TOKEN(TokenType::RPARENT);
+    } else if(CUR_TOKEN_IS(TokenType::PLUS) || CUR_TOKEN_IS(TokenType::MINU) || CUR_TOKEN_IS(TokenType::NOT)) {
+        // use UnaryExp -> UnaryOp UnaryExp
+        PARSE(unaryOp, UnaryOp);
+        PARSE(unaryExp, UnaryExp);
+    } else {
+        // use UnaryExp -> PrimaryExp
+        PARSE(primaryExp, PrimaryExp);
+    }
+    return true;
 }
 
 bool Parser::parseUnaryOp(UnaryOp* root) {
-    TODO;
+    log(root);
+
+    if(CUR_TOKEN_IS(TokenType::PLUS)) {
+        // use UnaryOp -> '+'
+        PARSE_TOKEN(TokenType::PLUS);
+    } else if(CUR_TOKEN_IS(TokenType::MINU)) {
+        // use UnaryOp -> '-'
+        PARSE_TOKEN(TokenType::MINU);
+    } else if(CUR_TOKEN_IS(TokenType::NOT)) {
+        // use UnaryOp -> '!'
+        PARSE_TOKEN(TokenType::NOT);
+    } else {
+        assert(0 && "invalid token type");
+    }
+    return true;
 }
 
 bool Parser::parseFuncRParams(FuncRParams* root) {
-    TODO;
+    log(root);
+    // only FuncRParams -> Exp { ',' Exp }
+    PARSE(exp_out, Exp);
+    while(CUR_TOKEN_IS(TokenType::COMMA)) {
+        PARSE_TOKEN(TokenType::COMMA);
+        PARSE(exp_in, Exp);
+    }
+    return true;
 }
 
 bool Parser::parseMulExp(MulExp* root) {
-    TODO;
+    log(root);
+    // MulExp -> UnaryExp { ('*' | '/' | '%') UnaryExp }
+    PARSE(unaryExp_out, UnaryExp);
+    while(CUR_TOKEN_IS(TokenType::MULT) || CUR_TOKEN_IS(TokenType::DIV) || CUR_TOKEN_IS(TokenType::MOD)) {
+        if(CUR_TOKEN_IS(TokenType::MULT)) {
+            PARSE_TOKEN(TokenType::MULT);
+        } else if(CUR_TOKEN_IS(TokenType::DIV)) {
+            PARSE_TOKEN(TokenType::DIV);
+        } else if(CUR_TOKEN_IS(TokenType::MOD)) {
+            PARSE_TOKEN(TokenType::MOD);
+        }
+        PARSE(unaryExp_in, UnaryExp);
+    }
+    return true;
 }
 
 bool Parser::parseAddExp(AddExp* root) {
-    TODO;
+    log(root);
+    // only AddExp -> MulExp { ('+' | '-') MulExp }
+    PARSE(mulExp_out, MulExp);
+    while(CUR_TOKEN_IS(TokenType::PLUS) || CUR_TOKEN_IS(TokenType::MINU)) {
+        if(CUR_TOKEN_IS(TokenType::PLUS)) {
+            PARSE_TOKEN(TokenType::PLUS);
+        } else if(CUR_TOKEN_IS(TokenType::MINU)) {
+            PARSE_TOKEN(TokenType::MINU);
+        }
+        PARSE(mulExp_in, MulExp);
+    }
+    return true;
 }
 
 bool Parser::parseRelExp(RelExp* root) {
-    TODO;
+    log(root);
+    // RelExp -> AddExp { ('<' | '>' | '<=' | '>=') AddExp }
+    PARSE(addExp_out, AddExp);
+    while(CUR_TOKEN_IS(TokenType::LEQ) || CUR_TOKEN_IS(TokenType::GEQ) || CUR_TOKEN_IS(TokenType::GTR) || CUR_TOKEN_IS(TokenType::LSS)) {
+        if(CUR_TOKEN_IS(TokenType::LEQ)) {
+            PARSE_TOKEN(TokenType::LEQ);
+        } else if(CUR_TOKEN_IS(TokenType::GEQ)) {
+            PARSE_TOKEN(TokenType::GEQ);
+        } else if(CUR_TOKEN_IS(TokenType::GTR)) {
+            PARSE_TOKEN(TokenType::GTR);
+        } else if(CUR_TOKEN_IS(TokenType::LSS)) {
+            PARSE_TOKEN(TokenType::LSS);
+        }
+        PARSE(addExp_in, AddExp);
+    }
+    return true;
 }
 
 bool Parser::parseEqExp(EqExp* root) {
-    TODO;
+    log(root);
+    // EqExp -> RelExp { ('==' | '!=') RelExp }
+    PARSE(relExp_out, RelExp);
+    while(CUR_TOKEN_IS(TokenType::EQL) || CUR_TOKEN_IS(TokenType::NEQ)) {
+        if(CUR_TOKEN_IS(TokenType::EQL)) {
+            PARSE_TOKEN(TokenType::EQL);
+        } else if(CUR_TOKEN_IS(TokenType::NEQ)) {
+            PARSE_TOKEN(TokenType::NEQ);
+        }
+        PARSE(relExp_in, RelExp);
+    }
+    return true;
 }
 
 bool Parser::parseLAndExp(LAndExp* root) {
-    TODO;
+    log(root);
+    // LAndExp -> EqExp [ '&&' LAndExp ]
+    PARSE(eqExp, EqExp);
+    if(CUR_TOKEN_IS(TokenType::AND)) {
+        // [ '&&' LAndExp ] is not empty
+        PARSE_TOKEN(TokenType::AND);
+        PARSE(lAndExp, LAndExp);
+    }
+    return true;
 }
 
 bool Parser::parseLOrExp(LOrExp* root) {
-    TODO;
+    log(root);
+    // LOrExp -> LAndExp [ '||' LOrExp ]
+    PARSE(lAndExp, LAndExp);
+    if(CUR_TOKEN_IS(TokenType::OR)) {
+        // [ '||' LOrExp ]
+        PARSE_TOKEN(TokenType::OR);
+        PARSE(lOrExp, LOrExp);
+    }
+    return true;
 }
 
 bool Parser::parseConstExp(ConstExp* root) {
-    TODO;
+    log(root);
+
+    // only ConstExp -> AddExp
+    PARSE(addExp, AddExp);
+
+    return true;
 }
 
 
