@@ -48,6 +48,7 @@ enum class Operator {
     _not,
     _and,
     _or
+    ,__unuse__
 };
 
 std::string toString(Operator t);

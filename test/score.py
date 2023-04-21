@@ -14,7 +14,7 @@ def score_compiler(arg1):
     elif step == "-s1":
         oftype = "json"
     elif step == "-s2":
-        oftype = "ir"
+        oftype = "out"
     else:
         print("illegal input")
         exit()
@@ -23,7 +23,7 @@ def score_compiler(arg1):
     ref_base = "./ref/" + arg1 + "/"
 
     score = 0
-    total = 47      # FIXME 改成读取测试用例数而不是写死
+    total = 58      # FIXME 改成读取测试用例数而不是写死
 
     if step == "-s0":
         for i in ["basic", "function"]:
@@ -61,6 +61,27 @@ def score_compiler(arg1):
                     cp = subprocess.run(cmd, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.PIPE)
                     if cp.returncode != 0:
                         record[file] = {"retval": cp.returncode, "err_detail": cp.stdout}
+                    else:
+                        score += 1
+                        record[file] = {"retval": 0}
+                    print(file, record[file])
+        print("score:",score,"/",total)
+    elif step == "-s2":
+        for i in ["basic", "function"]:
+            output_dir = output_base + i + '/'
+            ref_dir = ref_base + i + '/'
+            if os.path.exists(output_dir):
+                files = os.listdir(output_dir)
+                for file in files:
+                    if not (file[-4:] == ".out"):
+                        continue
+                    cmd = ' '.join(["diff", ref_dir + file, output_dir + file, '-wB'])
+                    if is_windows:
+                        cmd = cmd.replace('/','\\')
+                    # print(cmd)
+                    cp = subprocess.run(cmd, shell=True, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL)
+                    if cp.returncode != 0:
+                        record[file] = {"retval": cp.returncode, "err_detail": cp.stderr}
                     else:
                         score += 1
                         record[file] = {"retval": 0}
