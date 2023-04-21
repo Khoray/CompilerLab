@@ -182,7 +182,6 @@ bool frontend::DFA::next(char input, Token& buf) {
             break;
 
         case CharType::FloatDot:
-            ope = 0b11;
             cur_state = State::FloatLiteral;
             break;
         
@@ -381,7 +380,8 @@ std::string preprocess(std::ifstream& fin) {
             if(temp[i] == '/' && i + 1 < (int) temp.size() && temp[i + 1] == '*') {
                 // /**/ comments
                 is_in_comment = true;
-                break;
+                i++;
+                continue;
             }
             if(temp[i] == '/' && i + 1 < (int) temp.size() && temp[i + 1] == '/') {
                 // comments
