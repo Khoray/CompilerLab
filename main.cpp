@@ -1,5 +1,8 @@
 #include"front/lexical.h"
 #include"front/syntax.h"
+#include"front/semantic.h"
+#include"ir/ir.h"
+#include"tools/ir_executor.h"
 
 #include<string>
 #include<vector>
@@ -18,7 +21,9 @@ using std::vector;
  *  -s0: output of scanner
  *  -s1: output of parser, should be a json file 
  *  -s2: output IR
- *  -S: output rv assembly
+ *  -S:  output rv assembly
+ *  -e:  get ir::Program and execute it, print the main return value to stdout
+ *  -all[FIXME]
  * 
  * opt:
  * [FIXME]
@@ -54,19 +59,25 @@ int main(int argc, char** argv) {
         output_file << writer.write(json_output);
         return 0;
     }
-
-   // compiler <src_filename> -s2 -o <output_filename>
+    
+    frontend::Analyzer analyzer;
+    auto program = analyzer.get_ir_program(node);
+    
+    // compiler <src_filename> -s2 -o <output_filename>
     if(step == "-s2") {
-        std::cout << "todo";
-        return 0;
+        output_file << program.draw();
     }
 
-    // compiler <src_filename> -S -o <output_filename>
-    if(step == "-S") {
-        std::cout << "todo";
-        return 0;
-    }
+    // compiler <src_filename> -e -o <output_filename>
+    if(step == "-e") {
+        auto output_file_name = des;
+        auto input_file_name = src.substr(0,src.size()-2) + "in";
+        ir::reopen_output_file =  fopen(output_file_name.c_str(), "w");
+        ir::reopen_input_file =  fopen(input_file_name.c_str(), "r");
 
-    // should not reach here, invaild commad
-    return -1;
+        auto executor = ir::Executor(&program);
+        std::cout << program.draw();
+        fprintf(ir::reopen_output_file, "\n%d", executor.run());
+    }
+    return 0;
 }

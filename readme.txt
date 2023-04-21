@@ -27,8 +27,9 @@
     -step: 支持以下几种输入
         s0: 词法结果 token 串
         s1: 语法分析结果语法树, 以 json 格式输出
-        s2: 语义分析结果, 以 IR 程序形式输出                  ### TODO
-        -S: RISC-v 汇编                                     ### TODO
+        s2: 语义分析结果, 以 IR 程序形式输出                  
+        e : 执行 IR 测评机，从 xx.sy 读入源文件，重定向 xx.in 作为 IR 程序的标准输入，并将 IR 的标准输出输出到 <output_filename> 中
+        S : RISC-v 汇编                                     ### TODO
 
 测试:
 1. cd /test
