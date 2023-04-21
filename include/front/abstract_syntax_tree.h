@@ -21,6 +21,7 @@
 #include"ir/ir.h"
 using ir::Type;
 
+#include<set>
 #include<vector>
 #include<string>
 using std::vector;
@@ -145,6 +146,8 @@ struct BType: AstNode {
 };
 
 struct ConstDef: AstNode{
+    std::string arr_name;
+
     /**
      * @brief constructor
      */
@@ -152,6 +155,9 @@ struct ConstDef: AstNode{
 };
 
 struct ConstInitVal: AstNode{
+    string v;
+    Type t;
+
     /**
      * @brief constructor
      */
@@ -159,6 +165,8 @@ struct ConstInitVal: AstNode{
 };
 
 struct VarDecl: AstNode{
+    Type t;
+
     /**
      * @brief constructor
      */
@@ -166,6 +174,8 @@ struct VarDecl: AstNode{
 };
 
 struct VarDef: AstNode{
+    std::string arr_name;
+
     /**
      * @brief constructor
      */
@@ -173,6 +183,10 @@ struct VarDef: AstNode{
 };
 
 struct InitVal: AstNode{
+    bool is_computable = false;
+    string v;
+    Type t;
+
     /**
      * @brief constructor
      */
@@ -215,6 +229,10 @@ struct BlockItem: AstNode{
 };
 
 struct Stmt: AstNode{
+    // for while & break & continue, we need a vector to remember break & continue instruction
+    std::set<ir::Instruction*> jump_eow;  // jump to end of while
+    std::set<ir::Instruction*> jump_bow;  // jump to begin of while
+
     /**
      * @brief constructor
      */
@@ -222,6 +240,10 @@ struct Stmt: AstNode{
 };
 
 struct Exp: AstNode{
+    bool is_computable = false;
+    string v;
+    Type t;
+
     /**
      * @brief constructor
      */
@@ -229,6 +251,10 @@ struct Exp: AstNode{
 };
 
 struct Cond: AstNode{
+    bool is_computable = false;
+    string v;
+    Type t;
+
     /**
      * @brief constructor
      */
@@ -236,6 +262,11 @@ struct Cond: AstNode{
 };
 
 struct LVal: AstNode{
+    bool is_computable = false;
+    string v;
+    Type t;
+    int i;  // array index, legal if t is IntPtr or FloatPtr
+
     /**
      * @brief constructor
      */
@@ -243,6 +274,10 @@ struct LVal: AstNode{
 };
 
 struct Number: AstNode{
+    bool is_computable = true;
+    string v;
+    Type t;
+
     /**
      * @brief constructor
      */
@@ -250,6 +285,10 @@ struct Number: AstNode{
 };
 
 struct PrimaryExp: AstNode{
+    bool is_computable = false;
+    string v;
+    Type t;
+    
     /**
      * @brief constructor
      */
@@ -257,6 +296,10 @@ struct PrimaryExp: AstNode{
 };
 
 struct UnaryExp: AstNode{
+    bool is_computable = false;
+    string v;
+    Type t;
+
     /**
      * @brief constructor
      */
@@ -264,6 +307,8 @@ struct UnaryExp: AstNode{
 };
 
 struct UnaryOp: AstNode{
+    TokenType op;
+    
     /**
      * @brief constructor
      */
@@ -278,6 +323,10 @@ struct FuncRParams: AstNode{
 };
 
 struct MulExp: AstNode{
+    bool is_computable = false;
+    string v;
+    Type t;
+
     /**
      * @brief constructor
      */
@@ -285,6 +334,10 @@ struct MulExp: AstNode{
 };
 
 struct AddExp: AstNode{
+    bool is_computable = false;
+    string v;
+    Type t;
+
     /**
      * @brief constructor
      */
@@ -292,6 +345,10 @@ struct AddExp: AstNode{
 };
 
 struct RelExp: AstNode{
+    bool is_computable = false;
+    string v;
+    Type t = Type::Int;
+
     /**
      * @brief constructor
      */
@@ -299,6 +356,10 @@ struct RelExp: AstNode{
 };
 
 struct EqExp: AstNode{
+    bool is_computable = false;
+    string v;
+    Type t = Type::Int;
+
     /**
      * @brief constructor
      */
@@ -306,6 +367,10 @@ struct EqExp: AstNode{
 };
 
 struct LAndExp: AstNode{
+    bool is_computable = false;
+    string v;
+    Type t = Type::Int;
+
     /**
      * @brief constructor
      */
@@ -313,6 +378,10 @@ struct LAndExp: AstNode{
 };
 
 struct LOrExp: AstNode{
+    bool is_computable = false;
+    string v;
+    Type t = Type::Int;
+
     /**
      * @brief constructor
      */
@@ -320,12 +389,16 @@ struct LOrExp: AstNode{
 };
 
 struct ConstExp: AstNode{
+    bool is_computable = true;
+    string v;
+    Type t ;
+
     /**
      * @brief constructor
      */
     ConstExp(AstNode* p = nullptr);
 };
-
+    
 } // namespace frontend
 
 #endif
