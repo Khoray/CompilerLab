@@ -330,6 +330,7 @@ void frontend::Analyzer::AnalyzeFuncDef(FuncDef* root) {
     std::string funcname = ((Term*) root->children[1])->token.value;
     Type functype = funcTypech->t;
     Function fun(funcname, functype);
+    symbol_table.functions[funcname] = &fun;
     current_func = &fun;
     Block* funcBlock = (Block*) root->children.back();
     symbol_table.add_scope(funcBlock);
@@ -357,10 +358,19 @@ void frontend::Analyzer::AnalyzeFuncFParam(FuncFParam* root) {
     BType* Btypech = (BType*) root->children[0];
     std::string id = ((Term*) root->children[1])->token.value;
     bool is_ptr = false;
+    STE ste;
     if(root->children.size() > 2) {
         is_ptr = true;
+        ste.dimension.push_back(0);
+        int exppr = 5;
+        while(exppr < root->children.size() && root->children[exppr]->type == NodeType::EXP) {
+            Exp* exp = (Exp*) root->children[exppr];
+            AnalyzeExp(exp);
+            assert(exp->is_computable);
+            ste.dimension.push_back(std::stoi(exp->v));
+            exppr += 2;
+        }
     }
-    STE ste;
     ste.operand = Operand(id, is_ptr ? Btypech->t == Type::Int ? Type::IntPtr : Type::FloatPtr : Btypech->t);
     insert_ste(ste);
     current_func->ParameterList.emplace_back(symbol_table.get_scoped_name(id), ste.operand.type);
@@ -399,7 +409,7 @@ void frontend::Analyzer::AnalyzeStmt(Stmt* root) {
             Operand des = Operand(std::to_string(current_func->InstVec.size()), Type::IntLiteral);
             Instruction* goto_inst = new Instruction(op1, op2, des, Operator::_goto);
             current_func->addInst(goto_inst);
-            last_while->jump_eow.insert(goto_inst);
+            last_while.back()->jump_eow.insert(goto_inst);
         } else if(((Term*) root->children[0])->token.type == TokenType::CONTINUETK) {
             // continue
             Operand op1 = Operand();
@@ -407,13 +417,14 @@ void frontend::Analyzer::AnalyzeStmt(Stmt* root) {
             Operand des = Operand(std::to_string(current_func->InstVec.size()), Type::IntLiteral);
             Instruction* goto_inst = new Instruction(op1, op2, des, Operator::_goto);
             current_func->addInst(goto_inst);
-            last_while->jump_bow.insert(goto_inst);
+            last_while.back()->jump_bow.insert(goto_inst);
         } else if(((Term*) root->children[0])->token.type == TokenType::IFTK) {
             // if
             // calc cond
             Cond* cond = (Cond*) root->children[2];
             AnalyzeCond(cond);
             Instruction* elseinst = nullptr;
+            Instruction* breakelseinst = nullptr;
             std::string ifvar = get_tmp_var();
             {
                 // copy cond to temp
@@ -428,6 +439,7 @@ void frontend::Analyzer::AnalyzeStmt(Stmt* root) {
                 Operand op2 = Operand();
                 Operand des = Operand("2", Type::IntLiteral);
                 current_func->addInst(new Instruction(op1, op2, des, Operator::_goto));
+                release_tmp_var(1);
                 // if tx goto [pc, 2]
             }
             {
@@ -439,56 +451,349 @@ void frontend::Analyzer::AnalyzeStmt(Stmt* root) {
                 // goto [pc, else]
             }
             AnalyzeStmt((Stmt*) root->children[4]);
+            if(root->children.size() >= 6) {
+                {
+                    // end of if
+                    Operand op1 = Operand();
+                    Operand op2 = Operand();
+                    Operand des = Operand(std::to_string(current_func->InstVec.size()), Type::IntLiteral);
+                    breakelseinst = new Instruction(op1, op2, des, Operator::_goto);
+                    current_func->addInst(breakelseinst);
+                }
+            }
             elseinst->des.name = std::to_string(current_func->InstVec.size() - std::stoi(elseinst->des.name));
+            if(root->children.size() >= 6) {
+                AnalyzeStmt((Stmt*) root->children[6]);
+                breakelseinst->des.name = std::to_string(current_func->InstVec.size() - std::stoi(breakelseinst->des.name));
+            }
+        } else if(((Term*) root->children[0])->token.type == TokenType::WHILETK) {
+            last_while.push_back(root);
+            Cond* cond = (Cond*) root->children[2];
+            int condpos = current_func->InstVec.size();
+            AnalyzeCond(cond);
+            Instruction* elseinst = nullptr;
+            std::string ifvar = get_tmp_var();
+
             {
-                // end of if
+                // copy cond to temp
+                Operand op1 = Operand(cond->v, cond->t);
+                Operand op2 = Operand();
+                Operand des = Operand(ifvar, Type::Int);
+                current_func->addInst(new Instruction(op1, op2, des, Operator::def));
+            }
+            {
+                // cond if
+                Operand op1 = Operand(ifvar, Type::Int);
+                Operand op2 = Operand();
+                Operand des = Operand("2", Type::IntLiteral);
+                current_func->addInst(new Instruction(op1, op2, des, Operator::_goto));
+                release_tmp_var(1);
+                // if tx goto [pc, 2]
+            }
+            {
                 Operand op1 = Operand();
                 Operand op2 = Operand();
-                Operand des = Operand("0", Type::IntLiteral);
-                current_func->addInst(new Instruction(op1, op2, des, Operator::_goto));
+                Operand des = Operand(std::to_string(current_func->InstVec.size()), Type::IntLiteral);
+                elseinst = new Instruction(op1, op2, des, Operator::_goto);
+                current_func->addInst(elseinst);
+                // goto [pc, else]
             }
+
+            AnalyzeStmt((Stmt*) root->children[4]);
+            elseinst->des.name = std::to_string(current_func->InstVec.size() - std::stoi(elseinst->des.name));
+
+            for(Instruction* inst : root->jump_eow) {
+                inst->des.name = std::to_string(current_func->InstVec.size() - std::stoi(inst->des.name));
+            }
+
+            for(Instruction* inst : root->jump_bow) {
+                inst->des.name = std::to_string(condpos - std::stoi(inst->des.name));
+            }
+
+            last_while.pop_back();
+        } else if(((Term*) root->children[0])->token.type == TokenType::RETURNTK) {
+            if(root->children[1]->type == NodeType::TERMINAL) {
+                current_func->addInst(new Instruction(Operand(), Operand(), Operand(), Operator::_return));
+            } else {
+                Exp* exp = (Exp*) root->children[1];
+                AnalyzeExp(exp);
+                current_func->addInst(new Instruction(Operand(exp->v, exp->t), Operand(), Operand(), Operator::_return));
+            }
+        } else if(((Term*) root->children[0])->token.type == TokenType::SEMICN) {
+            // do nothing
+        }
+    } else if(root->children[0]->type == NodeType::EXP) {
+        AnalyzeExp((Exp*) root->children[0]);
+    } else if(root->children[0]->type == NodeType::LVAL) {
+        LVal* lval = (LVal*) root->children[0];
+        AnalyzeLVal(lval);
+        Exp* exp = (Exp*) root->children[2];
+        AnalyzeExp(exp);
+        if(lval->t == Type::IntPtr || lval->t == Type::FloatPtr) {
+            Operand op1 = Operand(symbol_table.get_scoped_name(lval->v), lval->t);
+            Operand op2 = Operand(lval->i, Type::Int);
+            Operand des = Operand(exp->v, exp->t);
+            current_func->addInst(new Instruction(op1, op2, des, Operator::store));
+        } else {
+            Operand op1 = Operand(exp->v, exp->t);
+            Operand op2 = Operand();
+            Operand des = Operand(symbol_table.get_scoped_name(lval->v), lval->t);
+            current_func->addInst(new Instruction(op1, op2, des, Operator::mov));
         }
     }
 }
 
-void frontend::Analyzer::AnalyzeExp(Exp*) {
-TODO;
+void frontend::Analyzer::AnalyzeExp(Exp* root) {
+    AddExp* addExp = (AddExp*) root->children[0];
+    AnalyzeAddExp(addExp);
+
+    COPY_EXP_NODE(addExp, root);
 }
 
-void frontend::Analyzer::AnalyzeCond(Cond*) {
-TODO;
+void frontend::Analyzer::AnalyzeCond(Cond* root) {
+    LOrExp* lorexp = (LOrExp*) root->children[0];
+    AnalyzeLOrExp(lorexp);
+
+    COPY_EXP_NODE(lorexp, root);
 }
 
-void frontend::Analyzer::AnalyzeLVal(LVal*) {
-TODO;
+void frontend::Analyzer::AnalyzeLVal(LVal* root) {
+    Term* idt = (Term*) root->children[0];
+    bool is_ptr = root->children.size() > 1;
+
+
+    STE ste = symbol_table.get_ste(idt->token.value);
+    root->id = idt->token.value;
+    
+    if(is_ptr) {
+        // root->v 
+        root->v = get_tmp_var();
+        root->t = Type::IntPtr;
+        std::string index = get_tmp_var();
+
+        Instruction *assignIndex = new Instruction(Operand("0", Type::IntLiteral), Operand(), Operand(index, Type::Int), Operator::mov);
+        current_func->addInst(assignIndex);
+
+        std::string tmp = get_tmp_var();
+        for(int i = 2; i < root->children.size(); i += 3) {
+            Exp* exp = (Exp*) root->children[i];
+            AnalyzeExp(exp);
+
+            Instruction *movInst = new Instruction(Operand(exp->v, exp->t), Operand(), Operand(tmp, Type::Int), Operator::mov);
+            current_func->addInst(movInst);
+
+            Instruction *addInst = new Instruction(Operand(index, Type::Int), Operand(tmp, Type::Int), Operand(index, Type::Int), Operator::add);
+            current_func->addInst(addInst);
+
+            if(i + 3 < root->children.size()) {
+                Instruction *movInst2 = new Instruction(Operand(std::to_string(ste.dimension[(i + 1) / 3]), Type::IntLiteral), Operand(), Operand(tmp, Type::Int), Operator::mov);
+                current_func->addInst(movInst2);
+
+                Instruction *mulInst = new Instruction(Operand(index, Type::Int), Operand(tmp, Type::Int), Operand(index, Type::Int), Operator::mul);
+                current_func->addInst(mulInst);
+            }
+        }
+
+        release_tmp_var(1);
+        Instruction *loadInst = new Instruction(Operand(symbol_table.get_scoped_name(idt->token.value), Type::IntPtr), Operand(index, Type::Int), Operand(root->v, Type::Int), Operator::load);
+        current_func->addInst(loadInst);
+
+        root->i = index;
+
+    } else {
+        if(ste.operand.type == Type::IntLiteral) {
+            root->is_computable = true;
+            root->t = Type::IntLiteral;
+            root->v = ste.operand.name;
+        } else {
+            root->is_computable = false;
+            root->t = Type::Int;
+            root->v = ste.operand.name;
+        }
+    }
 }
 
-void frontend::Analyzer::AnalyzeNumber(Number*) {
-TODO;
+void frontend::Analyzer::AnalyzeNumber(Number* root) {
+    Term* chroot = (Term*) root->children[0];
+    if(chroot->token.type == TokenType::INTLTR) {
+        root->t = Type::IntLiteral;
+    } else if(chroot->token.type == TokenType::FLOATLTR) {
+        root->t = Type::FloatLiteral;
+    }
+    root->v = chroot->token.value;
 }
 
-void frontend::Analyzer::AnalyzePrimaryExp(PrimaryExp*) {
-TODO;
+void frontend::Analyzer::AnalyzePrimaryExp(PrimaryExp* root) {
+    if(root->children[0]->type == NodeType::TERMINAL) {
+        Exp* exp = (Exp*) root->children[1];
+        AnalyzeExp(exp);
+        COPY_EXP_NODE(exp, root);
+    } else if(root->children[0]->type == NodeType::NUMBER) {
+        Number* number = (Number*) root->children[0];
+        AnalyzeNumber(number);
+        COPY_EXP_NODE(number, root); 
+    } else {
+        LVal* lval = (LVal*) root->children[0];
+        AnalyzeLVal(lval);
+        COPY_EXP_NODE(lval, root); 
+    }
 }
 
-void frontend::Analyzer::AnalyzeUnaryExp(UnaryExp*) {
-TODO;
+void frontend::Analyzer::AnalyzeUnaryExp(UnaryExp* root) {
+    if(root->children[0]->type == NodeType::PRIMARYEXP) {
+        PrimaryExp* primaryExp = (PrimaryExp*) root->children[0];
+        AnalyzePrimaryExp(primaryExp);
+        COPY_EXP_NODE(primaryExp, root);
+    } else if(root->children[0]->type == NodeType::UNARYOP) {
+        UnaryOp* unaryOp = (UnaryOp*) root->children[1];
+        AnalyzeUnaryOp(unaryOp);
+        UnaryExp* unaryExp = (UnaryExp*) root->children[1];
+        AnalyzeUnaryExp(unaryExp);
+        COPY_EXP_NODE(unaryExp, root); 
+        if(unaryExp->is_computable == true) {
+            if(unaryOp->op == TokenType::NOT) {
+                root->v = root->v == "0" ? "1" : "0";
+            } else if(unaryOp->op == TokenType::MINU) {
+                root->v = std::to_string(-std::stoi(root->v));
+            }
+        } else {
+            if(unaryOp->op == TokenType::NOT) {
+                current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(), Operand(root->v, root->t), Operator::_not));
+            } else if(unaryOp->op == TokenType::MINU) {
+                std::string zero = get_tmp_var();
+                current_func->addInst(new Instruction(Operand("0", Type::IntLiteral), Operand(), Operand(zero, Type::Int), Operator::mov));
+                current_func->addInst(new Instruction(Operand(zero, Type::Int), Operand(root->v, root->t), Operand(root->v, root->t), Operator::sub));
+            }
+        }
+    } else {
+        std::string funcname = ((Term*) root->children[0])->token.value;
+        std::vector<Operand> paras;
+        std::string ret_tmp = get_tmp_var();
+        int back_tmp = tmp_cnt;
+        Function *func = symbol_table.functions[funcname];
+        if(root->children[2]->type == NodeType::TERMINAL) {
+            current_func->addInst(new ir::CallInst(Operand(funcname, func->returnType), Operand(ret_tmp, func->returnType)));
+        } else {
+            FuncRParams* funcRParams = (FuncRParams*) root->children[2];
+            AnalyzeFuncRParams(paras, funcRParams);
+            current_func->addInst(new ir::CallInst(Operand(funcname, func->returnType), paras, Operand(ret_tmp, func->returnType)));
+        }
+        root->t = func->returnType;
+        root->v = ret_tmp;
+        root->is_computable = false;
+        tmp_cnt = back_tmp;
+    }
 }
 
-void frontend::Analyzer::AnalyzeUnaryOp(UnaryOp*) {
-TODO;
+void frontend::Analyzer::AnalyzeUnaryOp(UnaryOp* root) {
+    Term* chroot = (Term*) root->children[0];
+    root->op = chroot->token.type;
 }
 
-void frontend::Analyzer::AnalyzeFuncRParams(FuncRParams*) {
-TODO;
+void frontend::Analyzer::AnalyzeFuncRParams(std::vector<Operand> &paras, FuncRParams* root) {
+    int exppr = 0;
+    while(exppr < root->children.size() && root->children[exppr]->type == NodeType::EXP) {
+        Exp* exp = (Exp*) root->children[exppr];
+        AnalyzeExp(exp);
+        paras.emplace_back(exp->v, exp->t);
+        exppr += 2;
+    }
 }
 
-void frontend::Analyzer::AnalyzeMulExp(MulExp*) {
-TODO;
+void frontend::Analyzer::AnalyzeMulExp(MulExp* root) {
+    root->is_computable = true;
+    root->v = get_tmp_var();
+    int back_tmp = tmp_cnt;
+    for(int i = 0; i < root->children.size(); i += 2) {
+        UnaryExp* unaryexp = (UnaryExp*) root->children[i];
+        AnalyzeUnaryExp(unaryexp);
+        root->is_computable &= unaryexp->is_computable;
+    }
+    if(root->is_computable) {
+        int temp = std::stoi(((UnaryExp*) root->children[0])->v);
+        for(int i = 2; i < root->children.size(); i += 2) {
+            UnaryExp* unaryexp = (UnaryExp*) root->children[i];
+            Term* sign = (Term*) root->children[i - 1];
+            int nowval = std::stoi(unaryexp->v);
+            if(sign->token.type == TokenType::MULT) {
+                temp *= nowval;
+            } else if(sign->token.type == TokenType::DIV) {
+                temp /= nowval;
+            } else if(sign->token.type == TokenType::MOD) {
+                temp %= nowval;
+            }
+        }
+        root->v = std::to_string(temp);
+        root->t = Type::IntLiteral;
+        tmp_cnt--;
+    } else {
+        root->t = Type::Int;
+        UnaryExp* initu = (UnaryExp*) root->children[0];
+        current_func->addInst(new Instruction(Operand(initu->v, initu->t), Operand(), Operand(root->v, root->t), Operator::mov));
+        for(int i = 2; i < root->children.size(); i += 2) {
+            UnaryExp* unaryexp = (UnaryExp*) root->children[i];
+            Term* sign = (Term*) root->children[i - 1];
+            std::string uid;
+            if(unaryexp->t == Type::IntLiteral) {
+                uid = get_tmp_var();
+                current_func->addInst(new Instruction(Operand(unaryexp->v, unaryexp->t), Operand(), Operand(uid, Type::Int), Operator::mov));
+            }
+            if(sign->token.type == TokenType::MULT) {
+                current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::mul));
+            } else if(sign->token.type == TokenType::DIV) {
+                current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::div));
+            } else if(sign->token.type == TokenType::MOD) {
+                current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::mod));
+            }
+        }
+        tmp_cnt = back_tmp;
+    }
 }
 
-void frontend::Analyzer::AnalyzeAddExp(AddExp*) {
-TODO;
+void frontend::Analyzer::AnalyzeAddExp(AddExp* root) {
+    root->is_computable = true;
+    root->v = get_tmp_var();
+    int back_tmp = tmp_cnt;
+    for(int i = 0; i < root->children.size(); i += 2) {
+        MulExp* mulexp = (MulExp*) root->children[i];
+        AnalyzeMulExp(mulexp);
+        root->is_computable &= mulexp->is_computable;
+    }
+    if(root->is_computable) {
+        int temp = std::stoi(((MulExp*) root->children[0])->v);
+        for(int i = 2; i < root->children.size(); i += 2) {
+            MulExp* mulexp = (MulExp*) root->children[i];
+            Term* sign = (Term*) root->children[i - 1];
+            int nowval = std::stoi(mulexp->v);
+            if(sign->token.type == TokenType::PLUS) {
+                temp += nowval;
+            } else if(sign->token.type == TokenType::MINU) {
+                temp -= nowval;
+            }
+        }
+        root->v = std::to_string(temp);
+        root->t = Type::IntLiteral;
+        tmp_cnt--;
+    } else {
+        root->t = Type::Int;
+        MulExp* initu = (MulExp*) root->children[0];
+        current_func->addInst(new Instruction(Operand(initu->v, initu->t), Operand(), Operand(root->v, root->t), Operator::mov));
+        for(int i = 2; i < root->children.size(); i += 2) {
+            MulExp* mulexp = (MulExp*) root->children[i];
+            Term* sign = (Term*) root->children[i - 1];
+            std::string uid;
+            if(mulexp->t == Type::IntLiteral) {
+                uid = get_tmp_var();
+                current_func->addInst(new Instruction(Operand(mulexp->v, mulexp->t), Operand(), Operand(uid, Type::Int), Operator::mov));
+            }
+            if(sign->token.type == TokenType::PLUS) {
+                current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::add));
+            } else if(sign->token.type == TokenType::MINU) {
+                current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::sub));
+            }
+        }
+        tmp_cnt = back_tmp;
+    }
 }
 
 void frontend::Analyzer::AnalyzeRelExp(RelExp*) {

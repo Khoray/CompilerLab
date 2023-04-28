@@ -93,11 +93,12 @@ struct SymbolTable{
 // singleton class
 struct Analyzer {
     int tmp_cnt;
+    int tmp_cnt_float;
     vector<ir::Instruction*> g_init_inst;
     SymbolTable symbol_table;
     ir::Function* current_func;
     ir::Program program;
-    Stmt* last_while;
+    vector<Stmt*> last_while;
 
     /**
      * @brief constructor
@@ -137,7 +138,7 @@ struct Analyzer {
     void AnalyzePrimaryExp(PrimaryExp*);
     void AnalyzeUnaryExp(UnaryExp*);
     void AnalyzeUnaryOp(UnaryOp*);
-    void AnalyzeFuncRParams(FuncRParams*);
+    void AnalyzeFuncRParams(std::vector<ir::Operand>&, FuncRParams*);
     void AnalyzeMulExp(MulExp*);
     void AnalyzeAddExp(AddExp*);
     void AnalyzeRelExp(RelExp*);
