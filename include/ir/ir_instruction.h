@@ -11,6 +11,8 @@
 namespace ir
 {
 
+
+
 struct Instruction {
     Operand op1;
     Operand op2;
@@ -26,6 +28,20 @@ struct CallInst: public Instruction{
     CallInst(const Operand& op1, std::vector<Operand> paraList, const Operand& des);
     CallInst(const Operand& op1, const Operand& des);   //无参数情况
     std::string draw() const;
+};
+
+struct InstLinkNode {
+    Instruction* inst;
+    InstLinkNode* next_inst_node;
+    InstLinkNode(Instruction* inst);
+};
+struct InstLinkList {
+    int length;
+    InstLinkNode *head, *tail;
+    InstLinkList();
+    void push_back(Instruction* inst);
+    void merge(InstLinkList other);
+    ~InstLinkList();
 };
 
 

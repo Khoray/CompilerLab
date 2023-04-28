@@ -146,6 +146,7 @@ struct BType: AstNode {
 };
 
 struct ConstDef: AstNode{
+    Type t;
     std::string arr_name;
 
     /**
@@ -175,6 +176,7 @@ struct VarDecl: AstNode{
 
 struct VarDef: AstNode{
     std::string arr_name;
+    Type t;
 
     /**
      * @brief constructor
@@ -194,6 +196,7 @@ struct InitVal: AstNode{
 };
 
 struct FuncType: AstNode{
+    Type t;
     /**
      * @brief constructor
      */

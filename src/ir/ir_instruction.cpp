@@ -104,3 +104,28 @@ std::string ir::Instruction::draw() const {
     }
     return "invalid instruction";
 }
+
+ir::InstLinkList::InstLinkList(): length(0), head(nullptr), tail(nullptr) {}
+
+void ir::InstLinkList::push_back(Instruction* inst) {
+    InstLinkNode *u = new InstLinkNode(inst);
+    tail->next_inst_node = u;
+    tail = u;
+}
+
+void ir::InstLinkList::merge(InstLinkList other) {
+    length += other.length;
+    tail->next_inst_node = other.head;
+    tail = other.tail;
+}
+
+ir::InstLinkList::~InstLinkList() {
+    InstLinkNode* u = head;
+    while(u) {
+        InstLinkNode* nx = u->next_inst_node;
+        delete u;
+        u = nx;
+    }
+}
+
+ir::InstLinkNode::InstLinkNode(Instruction* inst): inst(inst) {} 

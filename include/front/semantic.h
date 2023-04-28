@@ -95,14 +95,56 @@ struct Analyzer {
     int tmp_cnt;
     vector<ir::Instruction*> g_init_inst;
     SymbolTable symbol_table;
+    ir::Function* current_func;
+    ir::Program program;
+    Stmt* last_while;
 
     /**
      * @brief constructor
      */
     Analyzer();
 
+    std::string get_tmp_var();
+
+    void release_tmp_var(int cnt);
+
+
     // analysis functions
     ir::Program get_ir_program(CompUnit*);
+    void insert_ste(STE ste);
+    void insert_inst(ir::Instruction* inst);
+
+    void AnalyzeCompUnit(CompUnit*);
+    void AnalyzeDecl(Decl*);
+    void AnalyzeConstDecl(ConstDecl*);
+    void AnalyzeBType(BType*);
+    void AnalyzeConstDef(ConstDef*);
+    void AnalyzeConstInitVal(STE&, std::vector<int>&, ConstInitVal*);
+    void AnalyzeVarDecl(VarDecl*);
+    void AnalyzeVarDef(VarDef*);
+    void AnalyzeInitVal(STE&, std::vector<int>&, InitVal*);
+    void AnalyzeFuncDef(FuncDef*);
+    void AnalyzeFuncType(FuncType*);
+    void AnalyzeFuncFParam(FuncFParam*);
+    void AnalyzeFuncFParams(FuncFParams*);
+    void AnalyzeBlock(Block*);
+    void AnalyzeBlockItem(BlockItem*);
+    void AnalyzeStmt(Stmt*);
+    void AnalyzeExp(Exp*);
+    void AnalyzeCond(Cond*);
+    void AnalyzeLVal(LVal*);
+    void AnalyzeNumber(Number*);
+    void AnalyzePrimaryExp(PrimaryExp*);
+    void AnalyzeUnaryExp(UnaryExp*);
+    void AnalyzeUnaryOp(UnaryOp*);
+    void AnalyzeFuncRParams(FuncRParams*);
+    void AnalyzeMulExp(MulExp*);
+    void AnalyzeAddExp(AddExp*);
+    void AnalyzeRelExp(RelExp*);
+    void AnalyzeEqExp(EqExp*);
+    void AnalyzeLAndExp(LAndExp*);
+    void AnalyzeLOrExp(LOrExp*);
+    void AnalyzeConstExp(ConstExp*);
 
     // reject copy & assignment
     Analyzer(const Analyzer&) = delete;
