@@ -1131,7 +1131,7 @@ void frontend::Analyzer::AnalyzeLOrExp(LOrExp* root) {
         std::string t2 = get_tmp_var();
         current_func->addInst(new Instruction(Operand(landexp->v, landexp->t), Operand(), Operand(t1, Type::Int), Operator::mov));
         current_func->addInst(new Instruction(Operand(lorexp->v, lorexp->t), Operand(), Operand(t2, Type::Int), Operator::mov));
-        current_func->addInst(new Instruction(Operand(t1, Type::Int), Operand(t2, Type::Int), Operand(root->v, Type::Int), Operator::_and));
+        current_func->addInst(new Instruction(Operand(t1, Type::Int), Operand(t2, Type::Int), Operand(root->v, Type::Int), Operator::_or));
         tmp_cnt = back_tmp;
     }
 }
