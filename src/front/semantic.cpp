@@ -53,6 +53,7 @@ string frontend::SymbolTable::get_scoped_name(string id) const {
             return id + "_" + scope_stack[i].name;
         }
     }
+    // 放过的都是临时变量！只在 PrimaryExp->LVal 不确定 LVal 是 ident 还是 临时变量的时候使用
     return id;
 }
 
@@ -102,6 +103,23 @@ std::string frontend::Analyzer::get_tmp_var() {
 
 void frontend::Analyzer::release_tmp_var(int cnt) {
     tmp_cnt -= cnt;
+}
+
+Operand frontend::Analyzer::literal_to_var(Operand op) {
+    std::string temp = get_tmp_var();
+    Operand des;
+    if(op.type == Type::IntLiteral) {
+        des = Operand(temp, Type::Int);
+        insert_inst(new Instruction(
+            op,
+            Operand(),
+            des,
+            Operator::mov
+        ));
+    } else if(op.type == Type::FloatLiteral) {
+        TODO;
+    }
+    return des;
 }
 
 void frontend::Analyzer::insert_ste(std::string name, STE ste) {
@@ -196,60 +214,65 @@ void frontend::Analyzer::AnalyzeConstDef(ConstDef* root) {
     // insert ste
     STE ste;
     vector<int> dim; 
+    int index = 0;
     if(is_ptr) {
         ste.operand = Operand(((Term*) root->children[0])->token.value, root->t == Type::Int ? Type::IntPtr : Type::FloatPtr);
         ste.dimension = dimension;
         // alloc memory to ste
+        insert_ste(ste.operand.name, ste);
         Operand op1 = Operand(std::to_string(len), Type::IntLiteral);
         Operand op2 = Operand();
         Operand des = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
         insert_inst(new Instruction(op1, op2, des, Operator::alloc));
-        insert_ste(ste.operand.name, ste);
-        AnalyzeConstInitVal(ste, dim, (ConstInitVal*) root->children[constExp_ptr]);
+        AnalyzeConstInitVal(index, ste, len, 0, (ConstInitVal*) root->children[constExp_ptr]);
     } else {
         ste.operand = Operand("assert", root->t == Type::Int ? Type::IntLiteral : Type::FloatLiteral);
-        AnalyzeConstInitVal(ste, dim, (ConstInitVal*) root->children[constExp_ptr]);
+        // 下面两句话顺序不能变，要先算出ste的值才能插入
+        AnalyzeConstInitVal(index, ste, len, 0, (ConstInitVal*) root->children[constExp_ptr]);
         insert_ste(((Term*) root->children[0])->token.value, ste);
     }
-    log("name=%s, type=%d, scope_name=%s", ste.operand.name.c_str(), ste.operand.type, symbol_table.scope_stack.back().name.c_str());
+    log("name=%s, type=%d, scope_name=%s, len=%d", ste.operand.name.c_str(), ste.operand.type, symbol_table.scope_stack.back().name.c_str(), len);
 
     // init val
     // TODO: array assign
 }
 
-void frontend::Analyzer::AnalyzeConstInitVal(STE& ste, std::vector<int>& dim, ConstInitVal* root) {
+void frontend::Analyzer::AnalyzeConstInitVal(int &index, STE& ste, int res, int level, ConstInitVal* root) {
     log("ConstInitVal, root->children[0]->type:%d", root->children[0]->type);
     if(root->children[0]->type == NodeType::TERMINAL) {
-        dim.push_back(0);
+        // ConstInitVal -> { ConstInitVal* }
+        int init_index = index;
         int ptr = 1;
         while(ptr < root->children.size() && root->children[ptr]->type == NodeType::CONSTINITVAL) {
-            AnalyzeConstInitVal(ste, dim, (ConstInitVal*) root->children[ptr]);
+            AnalyzeConstInitVal(index, ste, res / ste.dimension[level], level + 1, (ConstInitVal*) root->children[ptr]);
             ptr += 2;
-            dim.back()++;
         }
-        dim.pop_back();
+        for(; index < init_index + res; index++) {
+            Operand op1 = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
+            Operand op2 = Operand(std::to_string(index), Type::IntLiteral);
+            Operand des = Operand("0", ste.operand.type == Type::IntPtr ? Type::IntLiteral : Type::FloatLiteral);
+            des = literal_to_var(des);
+            release_tmp_var(1);
+            insert_inst(new Instruction(op1, op2, des, Operator::store));
+        }
     } else {
         // calc constexp val
         log("AnalyzeConstExp");
-        AnalyzeConstExp((ConstExp*) root->children[0]);
-
-        // calc index
-        int index = 0;
-        log("constinitval index:%d", index);
-        vector<int>& dimension = ste.dimension;
-        assert(dimension.size() == dim.size());
-        int base = 1;
-        for(int i = dimension.size() - 1; i >= 0; i--) {
-            index += dim[i] * base;
-            base *= dimension[i];
-        }
-
+        ConstExp* constexp = ((ConstExp*) root->children[0]);
+        AnalyzeConstExp(constexp);
+        std::cerr << "((ConstExp*) root->children[0])->v:" << ((ConstExp*) root->children[0])->v.c_str() << "\n";
         // store
         if(ste.operand.type == Type::IntPtr || ste.operand.type == Type::FloatPtr) {
             Operand op1 = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
             Operand op2 = Operand(std::to_string(index), Type::IntLiteral);
-            Operand des = Operand(((ConstExp*) root->children[0])->v, ste.operand.type == Type::IntPtr ? Type::IntLiteral : Type::FloatLiteral);
+
+            // store des should be int or float, should not be intliteral or float literal
+            std::string temp = get_tmp_var();
+            Operand des = Operand(constexp->v, constexp->t);
+            des = literal_to_var(des);
+            release_tmp_var(1);
             insert_inst(new Instruction(op1, op2, des, Operator::store));
+            index++;
         } else {
             ste.operand.name = ((ConstExp*) root->children[0])->v;
         }
@@ -290,63 +313,67 @@ void frontend::Analyzer::AnalyzeVarDef(VarDef* root) {
     if(is_ptr) {
         ste.operand = Operand(((Term*) root->children[0])->token.value, root->t == Type::Int ? Type::IntPtr : Type::FloatPtr);
         ste.dimension = dimension;
+        insert_ste(ste.operand.name, ste);
         Operand op1 = Operand(std::to_string(len), Type::IntLiteral);
         Operand op2 = Operand();
         Operand des = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
         insert_inst(new Instruction(op1, op2, des, Operator::alloc));
     } else {
         ste.operand = Operand(((Term*) root->children[0])->token.value, root->t == Type::Int ? Type::Int : Type::Float);
+        insert_ste(ste.operand.name, ste);
     }
-    insert_ste(ste.operand.name, ste);
     log("name=%s, type=%d, scope_name=%s", ste.operand.name.c_str(), ste.operand.type, symbol_table.scope_stack[1].name.c_str());
 
     // init val
     vector<int> dim;
     if(constExp_ptr < root->children.size()) {
-        AnalyzeInitVal(ste, dim, (InitVal*) root->children[constExp_ptr]);
+        int index = 0;
+        AnalyzeInitVal(index, ste, len, 0, (InitVal*) root->children[constExp_ptr]);
     }
     
     // TODO: array assign
 }
 
-void frontend::Analyzer::AnalyzeInitVal(STE& ste, std::vector<int>& dim, InitVal* root) {
+void frontend::Analyzer::AnalyzeInitVal(int& index, STE& ste, int res, int level, InitVal* root) {
     log("InitVal");
     int back_cnt = tmp_cnt;
     if(root->children[0]->type == NodeType::TERMINAL) {
-        dim.push_back(0);
         int ptr = 1;
+        int init_index = index;
         while(ptr < root->children.size() && root->children[ptr]->type == NodeType::INITVAL) {
-            AnalyzeInitVal(ste, dim, (InitVal*) root->children[ptr]);
+            AnalyzeInitVal(index, ste, res / ste.dimension[level], level + 1, (InitVal*) root->children[ptr]);
             ptr += 2;
-            dim.back()++;
         }
-        dim.pop_back();
+        for(; index < init_index + res; index++) {
+            Operand op1 = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
+            Operand op2 = Operand(std::to_string(index), Type::IntLiteral);
+            Operand des = Operand("0", ste.operand.type == Type::IntPtr ? Type::IntLiteral : Type::FloatLiteral);
+            des = literal_to_var(des);
+            insert_inst(new Instruction(op1, op2, des, Operator::store));
+        }
     } else {
         // calc constexp val
-        AnalyzeExp((Exp*) root->children[0]);
-
-        // calc index
-        int index = 0;
-        vector<int>& dimension = ste.dimension;
-        assert(dimension.size() == dim.size());
-        int base = 1;
-        for(int i = dimension.size() - 1; i >= 0; i--) {
-            index += dim[i] * base;
-            base *= dimension[i];
-        }
+        
+        Exp* ch = (Exp*) root->children[0];
+        AnalyzeExp(ch);
 
         // store
-        Exp* ch = (Exp*) root->children[0];
         if(ste.operand.type == Type::IntPtr || ste.operand.type == Type::FloatPtr) {
             Operand op1 = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
             Operand op2 = Operand(std::to_string(index), Type::IntLiteral);
             if(ch->is_computable) {
+                // store des should be int or float, should not be intliteral or float literal
+
                 Operand des = Operand(ch->v, ste.operand.type == Type::IntPtr ? Type::IntLiteral : Type::FloatLiteral);
+                des = literal_to_var(des);
+
                 insert_inst(new Instruction(op1, op2, des, Operator::store));
+                release_tmp_var(1);
             } else {
                 Operand des = Operand(ch->v, ste.operand.type == Type::IntPtr ? Type::Int : Type::Float);
                 insert_inst(new Instruction(op1, op1, des, Operator::store));
             }
+            index++;
         } else {
             // 初始化
             Operand des = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
@@ -377,7 +404,6 @@ void frontend::Analyzer::AnalyzeFuncDef(FuncDef* root) {
         
     }
     symbol_table.functions[funcname] = fun;
-    log("funcname=%s", (&fun)->name.c_str());
     current_func = fun;
     Block* funcBlock = (Block*) root->children.back();
     symbol_table.add_scope(funcBlock);
@@ -565,6 +591,12 @@ void frontend::Analyzer::AnalyzeStmt(Stmt* root) {
             }
 
             AnalyzeStmt((Stmt*) root->children[4]);
+            insert_inst(new Instruction(
+                Operand(), 
+                Operand(), 
+                Operand(std::to_string(condpos - (int) current_func->InstVec.size()), Type::IntLiteral), 
+                Operator::_goto
+            ));
             elseinst->des.name = std::to_string(current_func->InstVec.size() - std::stoi(elseinst->des.name));
 
             for(Instruction* inst : root->jump_eow) {
@@ -574,7 +606,7 @@ void frontend::Analyzer::AnalyzeStmt(Stmt* root) {
             for(Instruction* inst : root->jump_bow) {
                 inst->des.name = std::to_string(condpos - std::stoi(inst->des.name));
             }
-
+            // end of while
             last_while.pop_back();
         } else if(((Term*) root->children[0])->token.type == TokenType::RETURNTK) {
             if(root->children[1]->type == NodeType::TERMINAL) {
@@ -594,12 +626,19 @@ void frontend::Analyzer::AnalyzeStmt(Stmt* root) {
         AnalyzeLVal(lval);
         Exp* exp = (Exp*) root->children[2];
         AnalyzeExp(exp);
-        if(lval->t == Type::IntPtr || lval->t == Type::FloatPtr) {
-            Operand op1 = Operand(symbol_table.get_scoped_name(lval->v), lval->t);
+        if(lval->i != "") {
+            // lval是一个指针 case2.1
+
+            // 目前只有int
+            Operand op1 = Operand(symbol_table.get_scoped_name(lval->id), Type::IntPtr);
             Operand op2 = Operand(lval->i, Type::Int);
             Operand des = Operand(exp->v, exp->t);
+            if(exp->t == Type::IntLiteral) {
+                des = literal_to_var(des);
+            }
             current_func->addInst(new Instruction(op1, op2, des, Operator::store));
         } else {
+
             Operand op1 = Operand(exp->v, exp->t);
             Operand op2 = Operand();
             Operand des = Operand(symbol_table.get_scoped_name(lval->v), lval->t);
@@ -632,9 +671,10 @@ void frontend::Analyzer::AnalyzeLVal(LVal* root) {
     root->id = idt->token.value;
     
     if(is_ptr) {
+        // case1.1 and case2.1
         // root->v 
         root->v = get_tmp_var();
-        root->t = Type::IntPtr;
+        root->t = Type::Int;
         std::string index = get_tmp_var();
 
         Instruction *assignIndex = new Instruction(Operand("0", Type::IntLiteral), Operand(), Operand(index, Type::Int), Operator::mov);
@@ -668,12 +708,18 @@ void frontend::Analyzer::AnalyzeLVal(LVal* root) {
 
     } else {
         if(ste.operand.type == Type::IntLiteral) {
+            // case 3
             root->is_computable = true;
             root->t = Type::IntLiteral;
             root->v = ste.operand.name;
-        } else {
+        } else if(ste.operand.type == Type::Int) {
+            // case1.2 and case2.2
             root->is_computable = false;
             root->t = Type::Int;
+            root->v = ste.operand.name;
+        } else if(ste.operand.type == Type::IntPtr) {
+            root->is_computable = false;
+            root->t = Type::IntPtr;
             root->v = ste.operand.name;
         }
     }
@@ -704,9 +750,10 @@ void frontend::Analyzer::AnalyzePrimaryExp(PrimaryExp* root) {
         int back_tmp = tmp_cnt;
         LVal* lval = (LVal*) root->children[0];
         AnalyzeLVal(lval);
-        if(lval->t == Type::IntLiteral || lval->t == Type::FloatLiteral) {
+        if(lval->t == Type::IntLiteral || lval->t == Type::FloatLiteral || lval->t == Type::IntPtr || lval->t == Type::FloatPtr) {
             COPY_EXP_NODE(lval, root); 
-        } else {
+        } else if(lval->t == Type::Int || lval->t == Type::Float) {
+            // 现在只有int
             root->t = Type::Int;
             root->is_computable = false;
             Instruction* movinst = new Instruction(Operand(symbol_table.get_scoped_name(lval->v), lval->t), Operand(), Operand(root->v, root->t), Operator::mov);
@@ -784,7 +831,11 @@ void frontend::Analyzer::AnalyzeFuncRParams(std::vector<Operand> &paras, FuncRPa
     while(exppr < root->children.size() && root->children[exppr]->type == NodeType::EXP) {
         Exp* exp = (Exp*) root->children[exppr];
         AnalyzeExp(exp);
-        paras.emplace_back(exp->v, exp->t);
+        if(exp->t == Type::FloatPtr || exp->t == Type::IntPtr) {
+            paras.emplace_back(symbol_table.get_scoped_name(exp->v), exp->t);
+        } else {
+            paras.emplace_back(exp->v, exp->t);
+        }
         exppr += 2;
     }
 }

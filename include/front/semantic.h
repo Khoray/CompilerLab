@@ -108,6 +108,7 @@ struct Analyzer {
     std::string get_tmp_var();
 
     void release_tmp_var(int cnt);
+    ir::Operand literal_to_var(ir::Operand op);
 
 
     // analysis functions
@@ -120,10 +121,10 @@ struct Analyzer {
     void AnalyzeConstDecl(ConstDecl*);
     void AnalyzeBType(BType*);
     void AnalyzeConstDef(ConstDef*);
-    void AnalyzeConstInitVal(STE&, std::vector<int>&, ConstInitVal*);
+    void AnalyzeConstInitVal(int &, STE&, int, int, ConstInitVal*);
     void AnalyzeVarDecl(VarDecl*);
     void AnalyzeVarDef(VarDef*);
-    void AnalyzeInitVal(STE&, std::vector<int>&, InitVal*);
+    void AnalyzeInitVal(int&, STE&, int, int, InitVal*);
     void AnalyzeFuncDef(FuncDef*);
     void AnalyzeFuncType(FuncType*);
     void AnalyzeFuncFParam(FuncFParam*);

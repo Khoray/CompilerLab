@@ -271,6 +271,12 @@ struct LVal: AstNode{
     string i;  // array index, legal if t is IntPtr or FloatPtr
     string id;
 
+    // case1: v=temp_var, t=int, id=ident, i=index  例如：a[2][3]在exp中出现
+    //        v=ident,   t=int,   id=ident,  i=""         a 在 exp 中出现
+    // case2: v=temp_var, t=int, id=ident, i=index    例如：a[2][3] = Exp;
+    //        v=ident,   t=int,  id=ident, i=""         a = Exp;
+    // case3: v=literal, t=intliteral, id=ident, i=""   const a;
+    // case4: v=ident,  t=intptr,  id=ident, i=""       a is a pointer
     /**
      * @brief constructor
      */
