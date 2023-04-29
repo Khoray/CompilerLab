@@ -85,12 +85,12 @@ frontend::Analyzer::Analyzer(): tmp_cnt(0), symbol_table(), current_func(nullptr
 ir::Program frontend::Analyzer::get_ir_program(CompUnit* root) {
     log("fuck");
     AnalyzeCompUnit(root);
-    Function globalFunc("global", ir::Type::null);
+    Function* globalFunc = new Function("global", ir::Type::null);
     for(auto i : g_init_inst) {
-        globalFunc.addInst(i);
+        globalFunc->addInst(i);
     }
-    globalFunc.addInst(new Instruction(Operand(), Operand(), Operand(), Operator::_return));
-    program.addFunction(globalFunc);
+    globalFunc->addInst(new Instruction(Operand(), Operand(), Operand(), Operator::_return));
+    program.addFunction(*globalFunc);
     log("get_ir_program=%s", (program.functions[0].InstVec[0]->op2.name.c_str()));
     program.draw();
     return program;
@@ -310,6 +310,7 @@ void frontend::Analyzer::AnalyzeVarDef(VarDef* root) {
 }
 
 void frontend::Analyzer::AnalyzeInitVal(STE& ste, std::vector<int>& dim, InitVal* root) {
+    log("InitVal");
     int back_cnt = tmp_cnt;
     if(root->children[0]->type == NodeType::TERMINAL) {
         dim.push_back(0);
@@ -368,15 +369,16 @@ void frontend::Analyzer::AnalyzeFuncDef(FuncDef* root) {
     AnalyzeFuncType(funcTypech);
     std::string funcname = ((Term*) root->children[1])->token.value;
     Type functype = funcTypech->t;
-    Function fun(funcname, functype);
+    Function *fun = new Function(funcname, functype);
+    std::cerr << "test: func:" << int(fun->returnType) << "\n";
     if(funcname == "main") {
         ir::CallInst* callGlobal = new ir::CallInst(ir::Operand("global",ir::Type::null), ir::Operand("t0",ir::Type::null));
-        fun.addInst(callGlobal);
+        fun->addInst(callGlobal);
         
     }
-    symbol_table.functions[funcname] = &fun;
+    symbol_table.functions[funcname] = fun;
     log("funcname=%s", (&fun)->name.c_str());
-    current_func = &fun;
+    current_func = fun;
     Block* funcBlock = (Block*) root->children.back();
     symbol_table.add_scope(funcBlock);
     if(root->children[3]->type != NodeType::TERMINAL) {
@@ -385,8 +387,18 @@ void frontend::Analyzer::AnalyzeFuncDef(FuncDef* root) {
     }
     AnalyzeBlock(funcBlock);
     symbol_table.exit_scope();
+    current_func->addInst(new Instruction(
+        (functype == Type::null ? 
+        Operand() 
+        : functype == Type::Int ? 
+        Operand("0", Type::IntLiteral) 
+        : Operand("0", Type::FloatLiteral)),
+        Operand(),
+        Operand(),
+        Operator::_return
+    ));
     current_func = nullptr;
-    program.addFunction(fun);
+    program.addFunction(*fun);
 }
 
 void frontend::Analyzer::AnalyzeFuncType(FuncType* root) {
@@ -402,6 +414,7 @@ void frontend::Analyzer::AnalyzeFuncType(FuncType* root) {
 
 void frontend::Analyzer::AnalyzeFuncFParam(FuncFParam* root) {
     BType* Btypech = (BType*) root->children[0];
+    AnalyzeBType(Btypech);
     std::string id = ((Term*) root->children[1])->token.value;
     bool is_ptr = false;
     STE ste;
@@ -418,6 +431,7 @@ void frontend::Analyzer::AnalyzeFuncFParam(FuncFParam* root) {
         }
     }
     ste.operand = Operand(id, is_ptr ? Btypech->t == Type::Int ? Type::IntPtr : Type::FloatPtr : Btypech->t);
+    std::cerr << "para.type:" << (int) ste.operand.type << "\n";
     insert_ste(ste.operand.name, ste);
     current_func->ParameterList.emplace_back(symbol_table.get_scoped_name(id), ste.operand.type);
 }
@@ -734,14 +748,21 @@ void frontend::Analyzer::AnalyzeUnaryExp(UnaryExp* root) {
         }
     } else {
         std::string funcname = ((Term*) root->children[0])->token.value;
+        log("[UnaryExp->ident(paras)]funcname=%s", funcname.c_str());
         std::vector<Operand> paras;
         std::string ret_tmp = get_tmp_var();
         int back_tmp = tmp_cnt;
-        Function *func = symbol_table.functions[funcname];
+        Function *func = nullptr;
+        if(symbol_table.functions.count(funcname)) {
+            func = symbol_table.functions[funcname];
+        } else {
+            func = get_lib_funcs()->find(funcname)->second;
+        }
         if(root->children[2]->type == NodeType::TERMINAL) {
             current_func->addInst(new ir::CallInst(Operand(funcname, func->returnType), Operand(ret_tmp, func->returnType)));
         } else {
             FuncRParams* funcRParams = (FuncRParams*) root->children[2];
+            std::cerr << "test: func2:" << int(func->returnType) << "\n";
             AnalyzeFuncRParams(paras, funcRParams);
             current_func->addInst(new ir::CallInst(Operand(funcname, func->returnType), paras, Operand(ret_tmp, func->returnType)));
         }
@@ -755,7 +776,7 @@ void frontend::Analyzer::AnalyzeUnaryExp(UnaryExp* root) {
 void frontend::Analyzer::AnalyzeUnaryOp(UnaryOp* root) {
     Term* chroot = (Term*) root->children[0];
     root->op = chroot->token.type;
-    log("UnaryOp.type:%s", chroot->token.value);
+    log("UnaryOp.type:%d", chroot->token.type);
 }
 
 void frontend::Analyzer::AnalyzeFuncRParams(std::vector<Operand> &paras, FuncRParams* root) {
