@@ -39,7 +39,7 @@ using frontend::ConstExp;
 using frontend::Term;
 using frontend::TokenType;
 
-#define DEBUG_PARSER
+// #define DEBUG_PARSER
 #define TODO assert(0 && "todo")
 #define CUR_TOKEN_IS(tk_type) (token_stream[index].type == tk_type)
 #define NEXT_TOKEN_IS(tk_type) (index + 1 < token_stream.size() && token_stream[index + 1].type == tk_type)

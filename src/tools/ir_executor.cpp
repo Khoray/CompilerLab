@@ -155,6 +155,7 @@ int ir::Executor::run() {
     cur_ctx->retval_addr = &main_func_retval;
     cxt_stack.push(cur_ctx);
     while (cxt_stack.size()) {
+        std::cerr << "fuck";
         exec_ir();
     }
     
@@ -163,6 +164,7 @@ int ir::Executor::run() {
 
 bool ir::Executor::exec_ir(size_t n) {
     while (n--) {
+    
         auto inst = cur_ctx->pfunc->InstVec[cur_ctx->pc];
 #if (DEBUG_EXEC_BRIEF || DEBUG_EXEC_DETAIL)
     std::cout << cur_ctx->pc << ": " << inst->draw() << std::endl;
@@ -234,6 +236,7 @@ bool ir::Executor::exec_ir(size_t n) {
                 Context* cxt = nullptr;
                 for(auto& f: program->functions) {
                     if (f.name == fn) {
+                        
                         cxt = new Context(&f);
                     }
                 } 

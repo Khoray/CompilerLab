@@ -112,7 +112,7 @@ struct Analyzer {
 
     // analysis functions
     ir::Program get_ir_program(CompUnit*);
-    void insert_ste(STE ste);
+    void insert_ste(std::string name, STE ste);
     void insert_inst(ir::Instruction* inst);
 
     void AnalyzeCompUnit(CompUnit*);
