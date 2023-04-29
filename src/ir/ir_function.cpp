@@ -3,6 +3,7 @@
 #include <utility>
 #include <vector>
 #include <string>
+#include <iostream>
 
 
 ir::Function::Function(): name("null"), returnType(Type::null), ParameterList(std::vector<ir::Operand>()), InstVec(std::vector<ir::Instruction*>()) {}
@@ -23,8 +24,11 @@ std::string ir::Function::draw() {
     if(ParameterList.size())
         res = res.substr(0,res.size()-1);
     res += ")\n";
-    for (size_t i = 0; i < InstVec.size(); i++)
+    std::cerr << "drawing function:" << name << " nowres:" << res << "inst.size()" << InstVec.size() << "\n";
+    for (size_t i = 0; i < InstVec.size(); i++) {
+        std::cerr << "drawing inst:" << InstVec[i]->op1.name << "\n";
         res += "\t" + std::to_string(i) + ": " + InstVec[i]->draw() + "\n";
+    }
     res += "end\n\n";
     return res;
 }

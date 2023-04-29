@@ -133,7 +133,7 @@ TokenType get_keyword_type(std::string s) {
         return TokenType::IDENFR;
     }
 }
-#define DEBUG_DFA
+// #define DEBUG_DFA
 bool frontend::DFA::next(char input, Token& buf) {
 #ifdef DEBUG_DFA
 #include<iostream>
