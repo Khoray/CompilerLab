@@ -257,6 +257,7 @@ struct Cond: AstNode{
     bool is_computable = false;
     string v;
     Type t;
+    std::set<ir::Instruction*> jump_in;
 
     /**
      * @brief constructor

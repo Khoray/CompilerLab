@@ -98,6 +98,7 @@ struct Analyzer {
     SymbolTable symbol_table;
     ir::Function* current_func;
     ir::Program program;
+    Cond* last_cond;
     vector<Stmt*> last_while;
 
     /**

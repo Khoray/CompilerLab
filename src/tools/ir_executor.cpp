@@ -155,7 +155,6 @@ int ir::Executor::run() {
     cur_ctx->retval_addr = &main_func_retval;
     cxt_stack.push(cur_ctx);
     while (cxt_stack.size()) {
-        std::cerr << "fuck";
         exec_ir();
     }
     
@@ -195,8 +194,22 @@ bool ir::Executor::exec_ir(size_t n) {
                     cxt_stack.pop();
                 }
                 else {
-                    cxt_stack.pop();
+                    std::cerr << "stack-------------\n";
+                    std::stack<Context*> tmpst;
+                    while(cxt_stack.size()) {
+                        Context* u = cxt_stack.top();
+                        tmpst.push(u);
+                        cxt_stack.pop();
+                        std::cerr << u->pfunc->name << " " << u->pc << "\n";
+                    }
+                    while(tmpst.size()) {
+                        Context* u = tmpst.top();
+                        cxt_stack.push(u);
+                        tmpst.pop();
+                    }
+                    std::cerr << "stack-------------\n";
                     cur_ctx = cxt_stack.top();
+                    cxt_stack.pop();
                 }
             } break;
             case Operator::_goto: {
@@ -272,6 +285,20 @@ bool ir::Executor::exec_ir(size_t n) {
                     }
                     cur_ctx->pc++;
                     cxt_stack.push(cur_ctx);
+                    std::cerr << "stack.size()-------------" << cxt_stack.size() << "\n";
+                    std::stack<Context*> tmpst;
+                    while(cxt_stack.size()) {
+                        Context* u = cxt_stack.top();
+                        tmpst.push(u);
+                        cxt_stack.pop();
+                        std::cerr << u->pfunc->name << " " << u->pc << "\n";
+                    }
+                    while(tmpst.size()) {
+                        Context* u = tmpst.top();
+                        cxt_stack.push(u);
+                        tmpst.pop();
+                    }
+                    std::cerr << "stack-------------\n";
                     cur_ctx = cxt;
                 } 
                 else {

@@ -3,6 +3,7 @@
 #include<cassert>
 #include<iostream>
 #include<string>
+#include<iomanip>
 
 using ir::Instruction;
 using ir::Function;
@@ -329,6 +330,23 @@ void frontend::Analyzer::AnalyzeVarDef(VarDef* root) {
     if(constExp_ptr < root->children.size()) {
         int index = 0;
         AnalyzeInitVal(index, ste, len, 0, (InitVal*) root->children[constExp_ptr]);
+    } else if(current_func == nullptr) {
+        // 如果是全局变量，需要初始化成全0
+        if(ste.operand.type == Type::IntPtr || ste.operand.type == Type::FloatPtr) {
+            for(int i = 0; i < len; i++) {
+                Operand op1 = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
+                Operand op2 = Operand(std::to_string(i), Type::IntLiteral);
+                Operand des = Operand("0", ste.operand.type == Type::IntPtr ? Type::IntLiteral : Type::FloatLiteral);
+                des = literal_to_var(des);
+                insert_inst(new Instruction(op1, op2, des, Operator::store));
+            }
+        } else {
+            Operand op1 = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
+            Operand op2 = Operand();
+            Operand des = Operand("0", ste.operand.type == Type::Int ? Type::IntLiteral : Type::FloatLiteral);
+            insert_inst(new Instruction(op1, op2, des, Operator::def));
+        }
+
     }
     
     // TODO: array assign
@@ -513,26 +531,11 @@ void frontend::Analyzer::AnalyzeStmt(Stmt* root) {
             // if
             // calc cond
             Cond* cond = (Cond*) root->children[2];
+            last_cond = cond;
             AnalyzeCond(cond);
+            last_cond = nullptr;
             Instruction* elseinst = nullptr;
             Instruction* breakelseinst = nullptr;
-            std::string ifvar = get_tmp_var();
-            {
-                // copy cond to temp
-                Operand op1 = Operand(cond->v, cond->t);
-                Operand op2 = Operand();
-                Operand des = Operand(ifvar, Type::Int);
-                current_func->addInst(new Instruction(op1, op2, des, Operator::def));
-            }
-            {
-                // cond if
-                Operand op1 = Operand(ifvar, Type::Int);
-                Operand op2 = Operand();
-                Operand des = Operand("2", Type::IntLiteral);
-                current_func->addInst(new Instruction(op1, op2, des, Operator::_goto));
-                release_tmp_var(1);
-                // if tx goto [pc, 2]
-            }
             {
                 Operand op1 = Operand();
                 Operand op2 = Operand();
@@ -541,6 +544,12 @@ void frontend::Analyzer::AnalyzeStmt(Stmt* root) {
                 current_func->addInst(elseinst);
                 // goto [pc, else]
             }
+
+            // process goto_in
+            for(Instruction *inst : cond->jump_in) {
+                inst->des.name = std::to_string(current_func->InstVec.size() - std::stoi(inst->des.name));
+            }
+
             AnalyzeStmt((Stmt*) root->children[4]);
             if(root->children.size() >= 6) {
                 {
@@ -560,27 +569,13 @@ void frontend::Analyzer::AnalyzeStmt(Stmt* root) {
         } else if(((Term*) root->children[0])->token.type == TokenType::WHILETK) {
             last_while.push_back(root);
             Cond* cond = (Cond*) root->children[2];
+            last_cond = cond;
+
             int condpos = current_func->InstVec.size();
             AnalyzeCond(cond);
+            last_cond = nullptr;
             Instruction* elseinst = nullptr;
-            std::string ifvar = get_tmp_var();
 
-            {
-                // copy cond to temp
-                Operand op1 = Operand(cond->v, cond->t);
-                Operand op2 = Operand();
-                Operand des = Operand(ifvar, Type::Int);
-                current_func->addInst(new Instruction(op1, op2, des, Operator::def));
-            }
-            {
-                // cond if
-                Operand op1 = Operand(ifvar, Type::Int);
-                Operand op2 = Operand();
-                Operand des = Operand("2", Type::IntLiteral);
-                current_func->addInst(new Instruction(op1, op2, des, Operator::_goto));
-                release_tmp_var(1);
-                // if tx goto [pc, 2]
-            }
             {
                 Operand op1 = Operand();
                 Operand op2 = Operand();
@@ -589,6 +584,11 @@ void frontend::Analyzer::AnalyzeStmt(Stmt* root) {
                 current_func->addInst(elseinst);
                 // goto [pc, else]
             }
+
+            for(Instruction *inst : cond->jump_in) {
+                inst->des.name = std::to_string(current_func->InstVec.size() - std::stoi(inst->des.name));
+            }
+            
 
             AnalyzeStmt((Stmt*) root->children[4]);
             insert_inst(new Instruction(
@@ -729,10 +729,23 @@ void frontend::Analyzer::AnalyzeNumber(Number* root) {
     Term* chroot = (Term*) root->children[0];
     if(chroot->token.type == TokenType::INTLTR) {
         root->t = Type::IntLiteral;
+        root->v = chroot->token.value;
+        std::istringstream is(root->v);
+        int value = 0;
+        if(root->v.find("0b")) {
+            is >> std::setbase(2) >> value;
+        } else if(root->v.find("0x")) {
+            is >> std::setbase(16) >> value;
+        } else if(root->v[0] == '0' && root->v.length() > 1) {
+            is >> std::setbase(8) >> value;
+        } else {
+            is >> std::setbase(10) >> value;
+        }
+        root->v = std::to_string(value);
     } else if(chroot->token.type == TokenType::FLOATLTR) {
         root->t = Type::FloatLiteral;
+        root->v = chroot->token.value;
     }
-    root->v = chroot->token.value;
 }
 
 void frontend::Analyzer::AnalyzePrimaryExp(PrimaryExp* root) {
@@ -977,6 +990,7 @@ void frontend::Analyzer::AnalyzeRelExp(RelExp* root) {
     }
     if(root->is_computable) {
         int temp = std::stoi(((AddExp*) root->children[0])->v);
+        std::cerr << "rel:" << temp << " ";
         for(int i = 2; i < root->children.size(); i += 2) {
             AddExp* addexp = (AddExp*) root->children[i];
             Term* sign = (Term*) root->children[i - 1];
@@ -1077,62 +1091,71 @@ void frontend::Analyzer::AnalyzeEqExp(EqExp* root) {
 }
 
 void frontend::Analyzer::AnalyzeLAndExp(LAndExp* root) {
-    if(root->children.size() == 1) { // 只有一个儿子 直接继承
-        EqExp* eqexp = (EqExp*) root->children[0];
-        AnalyzeEqExp(eqexp);
-        COPY_EXP_NODE(eqexp, root);
-        return;
-    }
-    root->v = get_tmp_var();
-    root->t = Type::Int;
-    int back_tmp = tmp_cnt;
     EqExp* eqexp = (EqExp*) root->children[0];
     AnalyzeEqExp(eqexp);
 
-    LAndExp* landexp = (LAndExp*) root->children[2];
-    AnalyzeLAndExp(landexp);
-    if(eqexp->is_computable && landexp->is_computable) {
-        root->v = (eqexp->v == "1" && landexp->v == "1" ? "1" : "0");
-        root->t = Type::IntLiteral;
-        tmp_cnt--;
+
+    if(eqexp->is_computable) {
+        if(eqexp->v == "0") {
+            return;
+        } else {
+            if(root->children.size() > 1) {
+                LAndExp *landexp = (LAndExp*) root->children[2];
+                AnalyzeLAndExp(landexp);
+            } else {
+                // the last eqexp goto in of if/while
+                Instruction *goto_in = new Instruction(
+                    Operand(),
+                    Operand(),
+                    Operand(std::to_string(current_func->InstVec.size()), Type::IntLiteral),
+                    Operator::_goto
+                );
+                last_cond->jump_in.insert(goto_in);
+                insert_inst(goto_in);
+            }
+        } 
     } else {
-        std::string t1 = get_tmp_var();
-        std::string t2 = get_tmp_var();
-        current_func->addInst(new Instruction(Operand(eqexp->v, eqexp->t), Operand(), Operand(t1, Type::Int), Operator::mov));
-        current_func->addInst(new Instruction(Operand(landexp->v, landexp->t), Operand(), Operand(t2, Type::Int), Operator::mov));
-        current_func->addInst(new Instruction(Operand(t1, Type::Int), Operand(t2, Type::Int), Operand(root->v, Type::Int), Operator::_and));
-        tmp_cnt = back_tmp;
+        // goto next or
+        insert_inst(new Instruction(
+            Operand(eqexp->v, eqexp->t),
+            Operand(),
+            Operand(eqexp->v, eqexp->t),
+            Operator::_not
+        ));
+        int pos = current_func->InstVec.size();
+        Instruction *goto_next_or = new Instruction(
+            Operand(eqexp->v, eqexp->t),
+            Operand(),
+            Operand("assert", Type::IntLiteral),
+            Operator::_goto
+        );
+        insert_inst(goto_next_or);
+        if(root->children.size() > 1) {
+            LAndExp *landexp = (LAndExp*) root->children[2];
+            AnalyzeLAndExp(landexp);
+        } else {
+            // the last eqexp goto in of if/while
+            Instruction *goto_in = new Instruction(
+                Operand(),
+                Operand(),
+                Operand(std::to_string(current_func->InstVec.size()), Type::IntLiteral),
+                Operator::_goto
+            );
+            last_cond->jump_in.insert(goto_in);
+            insert_inst(goto_in);
+        }
+        // 跳到下一个or，也就是现在的位置
+        goto_next_or->des.name = std::to_string(current_func->InstVec.size() - pos);
     }
-
-
 }
 
 void frontend::Analyzer::AnalyzeLOrExp(LOrExp* root) {
-    if(root->children.size() == 1) { // 只有一个儿子 直接继承
-        LAndExp* landexp = (LAndExp*) root->children[0];
-        AnalyzeLAndExp(landexp);
-        COPY_EXP_NODE(landexp, root);
-        return;
-    }
-    root->v = get_tmp_var();
-    root->t = Type::Int;
-    int back_tmp = tmp_cnt;
     LAndExp* landexp = (LAndExp*) root->children[0];
     AnalyzeLAndExp(landexp);
 
-    LOrExp* lorexp = (LOrExp*) root->children[2];
-    AnalyzeLOrExp(lorexp);
-    if(landexp->is_computable && lorexp->is_computable) {
-        root->v = (landexp->v == "1" || lorexp->v == "1" ? "1" : "0");
-        root->t = Type::IntLiteral;
-        tmp_cnt--;
-    } else {
-        std::string t1 = get_tmp_var();
-        std::string t2 = get_tmp_var();
-        current_func->addInst(new Instruction(Operand(landexp->v, landexp->t), Operand(), Operand(t1, Type::Int), Operator::mov));
-        current_func->addInst(new Instruction(Operand(lorexp->v, lorexp->t), Operand(), Operand(t2, Type::Int), Operator::mov));
-        current_func->addInst(new Instruction(Operand(t1, Type::Int), Operand(t2, Type::Int), Operand(root->v, Type::Int), Operator::_or));
-        tmp_cnt = back_tmp;
+    if(root->children.size() > 1) {
+        LOrExp* lorexp = (LOrExp*) root->children[2];
+        AnalyzeLOrExp(lorexp);
     }
 }
 
