@@ -77,7 +77,7 @@ frontend::STE frontend::SymbolTable::get_ste(string id) const {
     assert(0 && "gg");
 }
 
-frontend::Analyzer::Analyzer(): tmp_cnt(0), symbol_table(), current_func(nullptr) {
+frontend::Analyzer::Analyzer(): tmp_cnt(0), tmp_f_cnt(0), symbol_table(), current_func(nullptr) {
     ScopeInfo si;
     si.cnt = 0;
     si.name = "g";
@@ -102,6 +102,10 @@ std::string frontend::Analyzer::get_tmp_var() {
     return "t" + std::to_string(tmp_cnt++);
 }
 
+std::string frontend::Analyzer::get_tmp_f_var() {
+    return "f" + std::to_string(tmp_f_cnt++);
+}
+
 void frontend::Analyzer::store_tmp() {
     tmp_stack.push_back(tmp_cnt);
 }
@@ -112,9 +116,10 @@ void frontend::Analyzer::restore_tmp() {
 }
 
 Operand frontend::Analyzer::literal_to_var(Operand op) {
-    std::string temp = get_tmp_var();
+    
     Operand des;
     if(op.type == Type::IntLiteral) {
+        std::string temp = get_tmp_var();
         des = Operand(temp, Type::Int);
         insert_inst(new Instruction(
             op,
@@ -123,8 +128,43 @@ Operand frontend::Analyzer::literal_to_var(Operand op) {
             Operator::mov
         ));
     } else if(op.type == Type::FloatLiteral) {
-        TODO;
+        std::string temp = get_tmp_f_var();
+        des = Operand(temp, Type::Float);
+        insert_inst(new Instruction(
+            op,
+            Operand(),
+            des,
+            Operator::fmov
+        ));
     }
+    return des;
+}
+
+Operand frontend::Analyzer::float_to_int(Operand op) {
+    assert(op.type == Type::Float && "in float to int, op type is not float");
+    std::string temp = get_tmp_var();
+    Operand des = Operand(temp, Type::Int);
+    insert_inst(new Instruction(
+        op,
+        Operand(),
+        des,
+        Operator::cvt_f2i
+    ));
+    
+    return des;
+}
+
+Operand frontend::Analyzer::int_to_float(Operand op) {
+    assert(op.type == Type::Int && "in int to float, op type is not int");
+    std::string temp = get_tmp_var();
+    Operand des = Operand(temp, Type::Float);
+    insert_inst(new Instruction(
+        op,
+        Operand(),
+        des,
+        Operator::cvt_i2f
+    ));
+    
     return des;
 }
 
@@ -328,7 +368,7 @@ void frontend::Analyzer::AnalyzeVarDef(VarDef* root) {
         Operand des = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
         insert_inst(new Instruction(op1, op2, des, Operator::alloc));
     } else {
-        ste.operand = Operand(((Term*) root->children[0])->token.value, root->t == Type::Int ? Type::Int : Type::Float);
+        ste.operand = Operand(((Term*) root->children[0])->token.value, root->t);
         insert_ste(ste.operand.name, ste);
     }
     log("name=%s, type=%d, scope_name=%s", ste.operand.name.c_str(), ste.operand.type, symbol_table.scope_stack[1].name.c_str());
@@ -404,11 +444,37 @@ void frontend::Analyzer::AnalyzeInitVal(int& index, STE& ste, int res, int level
             Operand des = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
             Operand op2 = Operand();
             if(ch->is_computable) {
-                Operand op1 = Operand(ch->v, ste.operand.type == Type::Int ? Type::IntLiteral : Type::FloatLiteral);
-                insert_inst(new Instruction(op1, op2, des, Operator::def));
+                if(ste.operand.type == Type::Int) {
+                    Operand op1 = Operand(ch->v, Type::IntLiteral);
+                    insert_inst(new Instruction(op1, op2, des, Operator::def));
+                } else {
+                    Operand op1 = Operand(ch->v, Type::FloatLiteral);
+                    insert_inst(new Instruction(op1, op2, des, Operator::fdef));
+                }
             } else {
-                Operand op1 = Operand(ch->v, ste.operand.type);
-                insert_inst(new Instruction(op1, op2, des, Operator::def));
+                if(ch->t == Type::Int) {
+                    if(ste.operand.type == Type::Int) {
+                        // int -> int
+                        Operand op1 = Operand(ch->v, Type::Int);
+                        insert_inst(new Instruction(op1, op2, des, Operator::def));
+                    } else {
+                        // int -> float
+                        Operand op1 = Operand(ch->v, Type::Int);
+                        op1 = int_to_float(op1);
+                        insert_inst(new Instruction(op1, op2, des, Operator::fdef));
+                    }
+                } else {
+                    if(ste.operand.type == Type::Int) {
+                        // float -> int
+                        Operand op1 = Operand(ch->v, Type::Float);
+                        op1 = float_to_int(op1);
+                        insert_inst(new Instruction(op1, op2, des, Operator::def));
+                    } else {
+                        // float -> float
+                        Operand op1 = Operand(ch->v, Type::Float);
+                        insert_inst(new Instruction(op1, op2, des, Operator::fdef));
+                    }
+                }
             }
         }
     }
@@ -620,7 +686,19 @@ void frontend::Analyzer::AnalyzeStmt(Stmt* root) {
             } else {
                 Exp* exp = (Exp*) root->children[1];
                 AnalyzeExp(exp);
-                current_func->addInst(new Instruction(Operand(exp->v, exp->t), Operand(), Operand(), Operator::_return));
+                if(exp->t == Type::IntLiteral || exp->t == Type::FloatLiteral) {
+                    current_func->addInst(new Instruction(Operand(exp->v, current_func->returnType == Type::Int ? Type::IntLiteral : Type::FloatLiteral), Operand(), Operand(), Operator::_return));
+                } else if(exp->t == current_func->returnType) {
+                    current_func->addInst(new Instruction(Operand(exp->v, current_func->returnType), Operand(), Operand(), Operator::_return));
+                } else {
+                    if(exp->t == Type::Int) {
+                        Operand retval = int_to_float(Operand(exp->v, exp->t));
+                        current_func->addInst(new Instruction(retval, Operand(), Operand(), Operator::_return));
+                    } else if(exp->t == Type::Float) {
+                        Operand retval = float_to_int(Operand(exp->v, exp->t));
+                        current_func->addInst(new Instruction(retval, Operand(), Operand(), Operator::_return));
+                    }
+                }
             }
         } else if(((Term*) root->children[0])->token.type == TokenType::SEMICN) {
             // do nothing
@@ -629,7 +707,7 @@ void frontend::Analyzer::AnalyzeStmt(Stmt* root) {
         AnalyzeExp((Exp*) root->children[0]);
     } else if(root->children[0]->type == NodeType::LVAL) {
         LVal* lval = (LVal*) root->children[0];
-        AnalyzeLVal(lval);
+        AnalyzeLVal(lval, 0);
         Exp* exp = (Exp*) root->children[2];
         AnalyzeExp(exp);
         if(lval->i != "") {
@@ -667,7 +745,7 @@ void frontend::Analyzer::AnalyzeCond(Cond* root) {
     COPY_EXP_NODE(lorexp, root);
 }
 
-void frontend::Analyzer::AnalyzeLVal(LVal* root) {
+void frontend::Analyzer::AnalyzeLVal(LVal* root, int needload) {
     log("LVal");
     Term* idt = (Term*) root->children[0];
     bool is_ptr = root->children.size() > 1;
@@ -679,7 +757,8 @@ void frontend::Analyzer::AnalyzeLVal(LVal* root) {
     if(is_ptr) {
         // case1.1 and case2.1
         // root->v 
-        root->v = get_tmp_var();
+        std::string tmp_int = get_tmp_var(), tmp_float = get_tmp_f_var();
+        // root->v = get_tmp_var(); 先不赋值
         root->t = Type::Int;
         std::string index = get_tmp_var();
         store_tmp();
@@ -705,9 +784,18 @@ void frontend::Analyzer::AnalyzeLVal(LVal* root) {
                 current_func->addInst(mulInst);
             }
         }
+        if(needload) { 
+            if(ste.operand.type == Type::IntPtr) {
+                Instruction *loadInst = new Instruction(Operand(symbol_table.get_scoped_name(idt->token.value), Type::IntPtr), Operand(index, Type::Int), Operand(tmp_int, Type::Int), Operator::load);
+                current_func->addInst(loadInst);
+                root->v = tmp_int;
+            } else {
+                Instruction *loadInst = new Instruction(Operand(symbol_table.get_scoped_name(idt->token.value), Type::FloatPtr), Operand(index, Type::Int), Operand(tmp_float, Type::Float), Operator::load);
+                current_func->addInst(loadInst);
+                root->v = tmp_float;
+            }
 
-        Instruction *loadInst = new Instruction(Operand(symbol_table.get_scoped_name(idt->token.value), Type::IntPtr), Operand(index, Type::Int), Operand(root->v, Type::Int), Operator::load);
-        current_func->addInst(loadInst);
+        }
 
         root->i = index;
         restore_tmp();
@@ -726,6 +814,21 @@ void frontend::Analyzer::AnalyzeLVal(LVal* root) {
         } else if(ste.operand.type == Type::IntPtr) {
             root->is_computable = false;
             root->t = Type::IntPtr;
+            root->v = ste.operand.name;
+        }
+        if(ste.operand.type == Type::FloatLiteral) {
+            // case 3
+            root->is_computable = true;
+            root->t = Type::FloatLiteral;
+            root->v = ste.operand.name;
+        } else if(ste.operand.type == Type::Float) {
+            // case1.2 and case2.2
+            root->is_computable = false;
+            root->t = Type::Float;
+            root->v = ste.operand.name;
+        } else if(ste.operand.type == Type::FloatPtr) {
+            root->is_computable = false;
+            root->t = Type::FloatPtr;
             root->v = ste.operand.name;
         }
     }
@@ -765,18 +868,27 @@ void frontend::Analyzer::AnalyzePrimaryExp(PrimaryExp* root) {
         AnalyzeNumber(number);
         COPY_EXP_NODE(number, root); 
     } else {
-        root->v = get_tmp_var();
+        std::string tmp_int = get_tmp_var(), tmp_float = get_tmp_f_var();
+        // root->v = ; 先不赋值
         store_tmp();
         int back_tmp = tmp_cnt;
         LVal* lval = (LVal*) root->children[0];
-        AnalyzeLVal(lval);
+        AnalyzeLVal(lval, 1);
         if(lval->t == Type::IntLiteral || lval->t == Type::FloatLiteral || lval->t == Type::IntPtr || lval->t == Type::FloatPtr) {
             COPY_EXP_NODE(lval, root); 
-        } else if(lval->t == Type::Int || lval->t == Type::Float) {
+        } else if(lval->t == Type::Int) {
+            root->v = tmp_int;
             // 现在只有int
             root->t = Type::Int;
             root->is_computable = false;
             Instruction* movinst = new Instruction(Operand(symbol_table.get_scoped_name(lval->v), lval->t), Operand(), Operand(root->v, root->t), Operator::mov);
+            insert_inst(movinst);
+            log(movinst->draw().c_str());
+        } else if(lval->t == Type::Float) {
+            root->v = tmp_float;
+            root->t = Type::Float;
+            root->is_computable = false;
+            Instruction* movinst = new Instruction(Operand(symbol_table.get_scoped_name(lval->v), lval->t), Operand(), Operand(root->v, root->t), Operator::fmov);
             insert_inst(movinst);
             log(movinst->draw().c_str());
         }
@@ -799,25 +911,38 @@ void frontend::Analyzer::AnalyzeUnaryExp(UnaryExp* root) {
         if(unaryExp->is_computable == true) {
             if(unaryOp->op == TokenType::NOT) {
                 root->v = root->v == "0" ? "1" : "0";
+                root->t = Type::IntLiteral;
             } else if(unaryOp->op == TokenType::MINU) {
-                root->v = std::to_string(-std::stoi(root->v));
+                if(root->t == Type::Float) {
+                    root->v = std::to_string(-std::stof(root->v));
+                } else {
+                    root->v = std::to_string(-std::stoi(root->v));
+                }
             }
         } else {
             log("UnaryExp not computable, func:%s, optype:%d", current_func->name.c_str(), unaryOp->op);
             if(unaryOp->op == TokenType::NOT) {
                 insert_inst(new Instruction(Operand(root->v, root->t), Operand(), Operand(root->v, root->t), Operator::_not));
             } else if(unaryOp->op == TokenType::MINU) {
-                std::string zero = get_tmp_var();
-                insert_inst(new Instruction(Operand("0", Type::IntLiteral), Operand(), Operand(zero, Type::Int), Operator::mov));
-                insert_inst(new Instruction(Operand(zero, Type::Int), Operand(root->v, root->t), Operand(root->v, root->t), Operator::sub));
-                tmp_cnt--;
+                if(root->t == Type::Int) {
+                    std::string zero = get_tmp_var();
+                    insert_inst(new Instruction(Operand("0", Type::IntLiteral), Operand(), Operand(zero, Type::Int), Operator::mov));
+                    insert_inst(new Instruction(Operand(zero, Type::Int), Operand(root->v, root->t), Operand(root->v, root->t), Operator::sub));
+                    tmp_cnt--;
+                } else {
+                    std::string zero = get_tmp_f_var();
+                    insert_inst(new Instruction(Operand("0", Type::FloatLiteral), Operand(), Operand(zero, Type::Float), Operator::fmov));
+                    insert_inst(new Instruction(Operand(zero, Type::Float), Operand(root->v, root->t), Operand(root->v, root->t), Operator::fsub));
+                    tmp_cnt--;
+                }
             }
         }
     } else {
         std::string funcname = ((Term*) root->children[0])->token.value;
         log("[UnaryExp->ident(paras)]funcname=%s", funcname.c_str());
         std::vector<Operand> paras;
-        std::string ret_tmp = get_tmp_var();
+        std::string tmp_int = get_tmp_var(), tmp_float = get_tmp_f_var();
+        std::string ret_tmp; // 先不赋值
         store_tmp();
         Function *func = nullptr;
         if(symbol_table.functions.count(funcname)) {
@@ -825,12 +950,20 @@ void frontend::Analyzer::AnalyzeUnaryExp(UnaryExp* root) {
         } else {
             func = get_lib_funcs()->find(funcname)->second;
         }
+        if(func->returnType == Type::Int || func->returnType == Type::null) {
+            ret_tmp = tmp_int;
+        } else {
+            ret_tmp = tmp_float;
+        }
         if(root->children[2]->type == NodeType::TERMINAL) {
             current_func->addInst(new ir::CallInst(Operand(funcname, func->returnType), Operand(ret_tmp, func->returnType)));
+            
         } else {
             FuncRParams* funcRParams = (FuncRParams*) root->children[2];
-            std::cerr << "test: func2:" << int(func->returnType) << "\n";
             AnalyzeFuncRParams(paras, funcRParams);
+
+            //TODO;
+            // TODO;
             current_func->addInst(new ir::CallInst(Operand(funcname, func->returnType), paras, Operand(ret_tmp, func->returnType)));
         }
         root->t = func->returnType;
@@ -855,6 +988,11 @@ void frontend::Analyzer::AnalyzeFuncRParams(std::vector<Operand> &paras, FuncRPa
             paras.emplace_back(symbol_table.get_scoped_name(exp->v), exp->t);
         } else {
             paras.emplace_back(exp->v, exp->t);
+            // if(exp->t == Type::IntLiteral || exp->t == Type::FloatLiteral) {
+            //     paras.emplace_back(literal_to_var(Operand(exp->v, exp->t)));
+            // } else {
+            //     paras.emplace_back(Operand(exp->v, exp->t));
+            // }
         }
         exppr += 2;
     }
@@ -869,52 +1007,100 @@ void frontend::Analyzer::AnalyzeMulExp(MulExp* root) {
         return;
     }
     root->is_computable = true;
-    root->v = get_tmp_var();
+    std::string tmp_int = get_tmp_var(), tmp_float = get_tmp_f_var();
+    // root->v = get_tmp_var(); 先不赋值
     store_tmp();
+    int is_int = 1;
     for(int i = 0; i < root->children.size(); i += 2) {
         UnaryExp* unaryexp = (UnaryExp*) root->children[i];
         AnalyzeUnaryExp(unaryexp);
         root->is_computable &= unaryexp->is_computable;
+        is_int &= (unaryexp->t == Type::Int || unaryexp->t == Type::IntLiteral);
     }
     if(root->is_computable) {
-        int temp = std::stoi(((UnaryExp*) root->children[0])->v);
-        for(int i = 2; i < root->children.size(); i += 2) {
-            UnaryExp* unaryexp = (UnaryExp*) root->children[i];
-            Term* sign = (Term*) root->children[i - 1];
-            int nowval = std::stoi(unaryexp->v);
-            if(sign->token.type == TokenType::MULT) {
-                temp *= nowval;
-            } else if(sign->token.type == TokenType::DIV) {
-                temp /= nowval;
-            } else if(sign->token.type == TokenType::MOD) {
-                temp %= nowval;
+        if(is_int) {
+            int temp = std::stoi(((UnaryExp*) root->children[0])->v);
+            for(int i = 2; i < root->children.size(); i += 2) {
+                UnaryExp* unaryexp = (UnaryExp*) root->children[i];
+                Term* sign = (Term*) root->children[i - 1];
+                int nowval = std::stoi(unaryexp->v);
+                if(sign->token.type == TokenType::MULT) {
+                    temp *= nowval;
+                } else if(sign->token.type == TokenType::DIV) {
+                    temp /= nowval;
+                } else if(sign->token.type == TokenType::MOD) {
+                    temp %= nowval;
+                }
             }
+            root->v = std::to_string(temp);
+            root->t = Type::IntLiteral;
+        } else {
+            float temp = std::stof(((UnaryExp*) root->children[0])->v);
+            for(int i = 2; i < root->children.size(); i += 2) {
+                UnaryExp* unaryexp = (UnaryExp*) root->children[i];
+                Term* sign = (Term*) root->children[i - 1];
+                float nowval = std::stof(unaryexp->v);
+                if(sign->token.type == TokenType::MULT) {
+                    temp *= nowval;
+                } else if(sign->token.type == TokenType::DIV) {
+                    temp /= nowval;
+                } else if(sign->token.type == TokenType::MOD) {
+                    assert(0 && "float can't mod");
+                }
+            }
+            root->v = std::to_string(temp);
+            root->t = Type::FloatLiteral;
         }
-        root->v = std::to_string(temp);
-        root->t = Type::IntLiteral;
     } else {
-        root->t = Type::Int;
-        UnaryExp* initu = (UnaryExp*) root->children[0];
-        Instruction* movinst = new Instruction(Operand(initu->v, initu->t), Operand(), Operand(root->v, root->t), Operator::mov);
-        insert_inst(movinst);
-        log("%s", movinst->draw().c_str());
+        if(is_int) {
+            root->v = tmp_int;
+            root->t = Type::Int;
+            UnaryExp* initu = (UnaryExp*) root->children[0];
+            Instruction* movinst = new Instruction(Operand(initu->v, initu->t), Operand(), Operand(root->v, root->t), Operator::mov);
+            insert_inst(movinst);
 
-        for(int i = 2; i < root->children.size(); i += 2) {
-            UnaryExp* unaryexp = (UnaryExp*) root->children[i];
-            Term* sign = (Term*) root->children[i - 1];
-            std::string uid;
-            if(unaryexp->t == Type::IntLiteral) {
-                uid = get_tmp_var();
-                current_func->addInst(new Instruction(Operand(unaryexp->v, unaryexp->t), Operand(), Operand(uid, Type::Int), Operator::mov));
-            } else {
-                uid = unaryexp->v;
+            for(int i = 2; i < root->children.size(); i += 2) {
+                UnaryExp* unaryexp = (UnaryExp*) root->children[i];
+                Term* sign = (Term*) root->children[i - 1];
+                std::string uid;
+                if(unaryexp->t == Type::IntLiteral) {
+                    uid = get_tmp_var();
+                    current_func->addInst(new Instruction(Operand(unaryexp->v, unaryexp->t), Operand(), Operand(uid, Type::Int), Operator::mov));
+                } else {
+                    uid = unaryexp->v;
+                }
+                if(sign->token.type == TokenType::MULT) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::mul));
+                } else if(sign->token.type == TokenType::DIV) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::div));
+                } else if(sign->token.type == TokenType::MOD) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::mod));
+                }
             }
-            if(sign->token.type == TokenType::MULT) {
-                current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::mul));
-            } else if(sign->token.type == TokenType::DIV) {
-                current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::div));
-            } else if(sign->token.type == TokenType::MOD) {
-                current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::mod));
+        } else {
+            root->v = tmp_float;
+            root->t = Type::Float;
+            UnaryExp* initu = (UnaryExp*) root->children[0];
+            Instruction* movinst = new Instruction(Operand(initu->v, initu->t), Operand(), Operand(root->v, root->t), Operator::fmov);
+            insert_inst(movinst);
+
+            for(int i = 2; i < root->children.size(); i += 2) {
+                UnaryExp* unaryexp = (UnaryExp*) root->children[i];
+                Term* sign = (Term*) root->children[i - 1];
+                std::string uid;
+                if(unaryexp->t == Type::FloatLiteral || unaryexp->t == Type::IntLiteral) {
+                    uid = get_tmp_f_var();
+                    current_func->addInst(new Instruction(Operand(unaryexp->v, Type::FloatLiteral), Operand(), Operand(uid, Type::Float), Operator::fmov));
+                } else if(unaryexp->t == Type::Float) {
+                    uid = unaryexp->v;
+                } else {
+                    uid = int_to_float(Operand(unaryexp->v, unaryexp->t)).name;
+                }
+                if(sign->token.type == TokenType::MULT) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::fmul));
+                } else if(sign->token.type == TokenType::DIV) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::fdiv));
+                }
             }
         }
     }
@@ -922,57 +1108,102 @@ void frontend::Analyzer::AnalyzeMulExp(MulExp* root) {
 }
 
 void frontend::Analyzer::AnalyzeAddExp(AddExp* root) {
-    log("Addexp");
+    log("AddExp");
     if(root->children.size() == 1) { // 只有一个儿子 直接继承
         MulExp* mulexp = (MulExp*) root->children[0];
         AnalyzeMulExp(mulexp);
         COPY_EXP_NODE(mulexp, root);
         return;
     }
-
     root->is_computable = true;
-    root->v = get_tmp_var();
+    std::string tmp_int = get_tmp_var(), tmp_float = get_tmp_f_var();
+    // root->v = get_tmp_var(); 先不赋值
     store_tmp();
-    int back_tmp = tmp_cnt;
+    int is_int = 1;
     for(int i = 0; i < root->children.size(); i += 2) {
         MulExp* mulexp = (MulExp*) root->children[i];
         AnalyzeMulExp(mulexp);
         root->is_computable &= mulexp->is_computable;
+        is_int &= (mulexp->t == Type::Int || mulexp->t == Type::IntLiteral);
     }
     if(root->is_computable) {
-        int temp = std::stoi(((MulExp*) root->children[0])->v);
-        for(int i = 2; i < root->children.size(); i += 2) {
-            MulExp* mulexp = (MulExp*) root->children[i];
-            Term* sign = (Term*) root->children[i - 1];
-            int nowval = std::stoi(mulexp->v);
-            if(sign->token.type == TokenType::PLUS) {
-                temp += nowval;
-            } else if(sign->token.type == TokenType::MINU) {
-                temp -= nowval;
+        if(is_int) {
+            int temp = std::stoi(((MulExp*) root->children[0])->v);
+            for(int i = 2; i < root->children.size(); i += 2) {
+                MulExp* mulexp = (MulExp*) root->children[i];
+                Term* sign = (Term*) root->children[i - 1];
+                int nowval = std::stoi(mulexp->v);
+                if(sign->token.type == TokenType::PLUS) {
+                    temp += nowval;
+                } else if(sign->token.type == TokenType::MINU) {
+                    temp -= nowval;
+                }
             }
+            root->v = std::to_string(temp);
+            root->t = Type::IntLiteral;
+        } else {
+            float temp = std::stof(((MulExp*) root->children[0])->v);
+            for(int i = 2; i < root->children.size(); i += 2) {
+                MulExp* mulexp = (MulExp*) root->children[i];
+                Term* sign = (Term*) root->children[i - 1];
+                float nowval = std::stof(mulexp->v);
+                if(sign->token.type == TokenType::PLUS) {
+                    temp += nowval;
+                } else if(sign->token.type == TokenType::MINU) {
+                    temp -= nowval;
+                }
+            }
+            root->v = std::to_string(temp);
+            root->t = Type::FloatLiteral;
         }
-        root->v = std::to_string(temp);
-        root->t = Type::IntLiteral;
     } else {
-        root->t = Type::Int;
-        MulExp* initu = (MulExp*) root->children[0];
-        Instruction* movinst = new Instruction(Operand(initu->v, initu->t), Operand(), Operand(root->v, root->t), Operator::mov);
-        current_func->addInst(movinst);
-        log(movinst->draw().c_str());
-        for(int i = 2; i < root->children.size(); i += 2) {
-            MulExp* mulexp = (MulExp*) root->children[i];
-            Term* sign = (Term*) root->children[i - 1];
-            std::string uid;
-            if(mulexp->t == Type::IntLiteral) {
-                uid = get_tmp_var();
-                current_func->addInst(new Instruction(Operand(mulexp->v, mulexp->t), Operand(), Operand(uid, Type::Int), Operator::mov));
-            } else {
-                uid = mulexp->v;
+        if(is_int) {
+            root->v = tmp_int;
+            root->t = Type::Int;
+            MulExp* initu = (MulExp*) root->children[0];
+            Instruction* movinst = new Instruction(Operand(initu->v, initu->t), Operand(), Operand(root->v, root->t), Operator::mov);
+            insert_inst(movinst);
+
+            for(int i = 2; i < root->children.size(); i += 2) {
+                MulExp* mulexp = (MulExp*) root->children[i];
+                Term* sign = (Term*) root->children[i - 1];
+                std::string uid;
+                if(mulexp->t == Type::IntLiteral) {
+                    uid = get_tmp_var();
+                    current_func->addInst(new Instruction(Operand(mulexp->v, mulexp->t), Operand(), Operand(uid, Type::Int), Operator::mov));
+                } else {
+                    uid = mulexp->v;
+                }
+                if(sign->token.type == TokenType::PLUS) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::add));
+                } else if(sign->token.type == TokenType::MINU) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::sub));
+                }
             }
-            if(sign->token.type == TokenType::PLUS) {
-                current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::add));
-            } else if(sign->token.type == TokenType::MINU) {
-                current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::sub));
+        } else {
+            root->v = tmp_float;
+            root->t = Type::Float;
+            MulExp* initu = (MulExp*) root->children[0];
+            Instruction* movinst = new Instruction(Operand(initu->v, initu->t), Operand(), Operand(root->v, root->t), Operator::fmov);
+            insert_inst(movinst);
+
+            for(int i = 2; i < root->children.size(); i += 2) {
+                MulExp* mulexp = (MulExp*) root->children[i];
+                Term* sign = (Term*) root->children[i - 1];
+                std::string uid;
+                if(mulexp->t == Type::FloatLiteral || mulexp->t == Type::IntLiteral) {
+                    uid = get_tmp_f_var();
+                    current_func->addInst(new Instruction(Operand(mulexp->v, Type::FloatLiteral), Operand(), Operand(uid, Type::Float), Operator::fmov));
+                } else if(mulexp->t == Type::Float) {
+                    uid = mulexp->v;
+                } else {
+                    uid = int_to_float(Operand(mulexp->v, mulexp->t)).name;
+                }
+                if(sign->token.type == TokenType::PLUS) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::fadd));
+                } else if(sign->token.type == TokenType::MINU) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::fsub));
+                }
             }
         }
     }
@@ -980,6 +1211,7 @@ void frontend::Analyzer::AnalyzeAddExp(AddExp* root) {
 }
 
 void frontend::Analyzer::AnalyzeRelExp(RelExp* root) {
+    log("RelExp");
     if(root->children.size() == 1) { // 只有一个儿子 直接继承
         AddExp* addexp = (AddExp*) root->children[0];
         AnalyzeAddExp(addexp);
@@ -987,55 +1219,110 @@ void frontend::Analyzer::AnalyzeRelExp(RelExp* root) {
         return;
     }
     root->is_computable = true;
-    root->v = get_tmp_var();
+    std::string tmp_int = get_tmp_var(), tmp_float = get_tmp_f_var();
+    // root->v = get_tmp_var(); 先不赋值
     store_tmp();
-    int back_tmp = tmp_cnt;
+    int is_int = 1;
     for(int i = 0; i < root->children.size(); i += 2) {
         AddExp* addexp = (AddExp*) root->children[i];
         AnalyzeAddExp(addexp);
         root->is_computable &= addexp->is_computable;
+        is_int &= (addexp->t == Type::Int || addexp->t == Type::IntLiteral);
     }
     if(root->is_computable) {
-        int temp = std::stoi(((AddExp*) root->children[0])->v);
-        std::cerr << "rel:" << temp << " ";
-        for(int i = 2; i < root->children.size(); i += 2) {
-            AddExp* addexp = (AddExp*) root->children[i];
-            Term* sign = (Term*) root->children[i - 1];
-            int nowval = std::stoi(addexp->v);
-            if(sign->token.type == TokenType::LSS) {
-                temp = (temp < nowval);
-            } else if(sign->token.type == TokenType::GTR) {
-                temp = (temp > nowval);
-            } else if(sign->token.type == TokenType::LEQ) {
-                temp = (temp <= nowval);
-            } else if(sign->token.type == TokenType::GEQ) {
-                temp = (temp >= nowval);
-            } 
-        }
-        root->v = std::to_string(temp);
-        root->t = Type::IntLiteral;
-    } else {
-        root->t = Type::Int;
-        AddExp* initu = (AddExp*) root->children[0];
-        current_func->addInst(new Instruction(Operand(initu->v, initu->t), Operand(), Operand(root->v, root->t), Operator::mov));
-        for(int i = 2; i < root->children.size(); i += 2) {
-            AddExp* addexp = (AddExp*) root->children[i];
-            Term* sign = (Term*) root->children[i - 1];
-            std::string uid;
-            if(addexp->t == Type::IntLiteral) {
-                uid = get_tmp_var();
-                current_func->addInst(new Instruction(Operand(addexp->v, addexp->t), Operand(), Operand(uid, Type::Int), Operator::mov));
-            } else {
-                uid = addexp->v;
+        if(is_int) {
+            int temp = std::stoi(((AddExp*) root->children[0])->v);
+            for(int i = 2; i < root->children.size(); i += 2) {
+                AddExp* addexp = (AddExp*) root->children[i];
+                Term* sign = (Term*) root->children[i - 1];
+                int nowval = std::stoi(addexp->v);
+                if(sign->token.type == TokenType::LSS) {
+                    temp = (temp < nowval);
+                } else if(sign->token.type == TokenType::GTR) {
+                    temp = (temp > nowval);
+                } else if(sign->token.type == TokenType::LEQ) {
+                    temp = (temp <= nowval);
+                } else if(sign->token.type == TokenType::GEQ) {
+                    temp = (temp >= nowval);
+                } 
             }
-            if(sign->token.type == TokenType::LSS) {
-                current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::lss));
-            } else if(sign->token.type == TokenType::GTR) {
-                current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::gtr));
-            } else if(sign->token.type == TokenType::LEQ) {
-                current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::leq));
-            } else if(sign->token.type == TokenType::GEQ) {
-                current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::geq));
+            root->v = std::to_string(temp);
+            root->t = Type::IntLiteral;
+        } else {
+            float temp = std::stof(((AddExp*) root->children[0])->v);
+            for(int i = 2; i < root->children.size(); i += 2) {
+                AddExp* addexp = (AddExp*) root->children[i];
+                Term* sign = (Term*) root->children[i - 1];
+                float nowval = std::stof(addexp->v);
+                if(sign->token.type == TokenType::LSS) {
+                    temp = (temp < nowval);
+                } else if(sign->token.type == TokenType::GTR) {
+                    temp = (temp > nowval);
+                } else if(sign->token.type == TokenType::LEQ) {
+                    temp = (temp <= nowval);
+                } else if(sign->token.type == TokenType::GEQ) {
+                    temp = (temp >= nowval);
+                } 
+            }
+            root->v = std::to_string(temp);
+            root->t = Type::FloatLiteral;
+        }
+    } else {
+        if(is_int) {
+            root->v = tmp_int;
+            root->t = Type::Int;
+            AddExp* initu = (AddExp*) root->children[0];
+            Instruction* movinst = new Instruction(Operand(initu->v, initu->t), Operand(), Operand(root->v, root->t), Operator::mov);
+            insert_inst(movinst);
+
+            for(int i = 2; i < root->children.size(); i += 2) {
+                AddExp* addexp = (AddExp*) root->children[i];
+                Term* sign = (Term*) root->children[i - 1];
+                std::string uid;
+                if(addexp->t == Type::IntLiteral) {
+                    uid = get_tmp_var();
+                    current_func->addInst(new Instruction(Operand(addexp->v, addexp->t), Operand(), Operand(uid, Type::Int), Operator::mov));
+                } else {
+                    uid = addexp->v;
+                }
+                if(sign->token.type == TokenType::LSS) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::lss));
+                } else if(sign->token.type == TokenType::GTR) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::gtr));
+                } else if(sign->token.type == TokenType::LEQ) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::leq));
+                } else if(sign->token.type == TokenType::GEQ) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::geq));
+                }
+            }
+        } else {
+            root->v = tmp_float;
+            root->t = Type::Float;
+            AddExp* initu = (AddExp*) root->children[0];
+            Instruction* movinst = new Instruction(Operand(initu->v, initu->t), Operand(), Operand(root->v, root->t), Operator::fmov);
+            insert_inst(movinst);
+
+            for(int i = 2; i < root->children.size(); i += 2) {
+                AddExp* addexp = (AddExp*) root->children[i];
+                Term* sign = (Term*) root->children[i - 1];
+                std::string uid;
+                if(addexp->t == Type::FloatLiteral || addexp->t == Type::IntLiteral) {
+                    uid = get_tmp_f_var();
+                    current_func->addInst(new Instruction(Operand(addexp->v, Type::FloatLiteral), Operand(), Operand(uid, Type::Float), Operator::fmov));
+                } else if(addexp->t == Type::Float) {
+                    uid = addexp->v;
+                } else {
+                    uid = int_to_float(Operand(addexp->v, addexp->t)).name;
+                }
+                if(sign->token.type == TokenType::LSS) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::flss));
+                } else if(sign->token.type == TokenType::GTR) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::fgtr));
+                } else if(sign->token.type == TokenType::LEQ) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::fleq));
+                } else if(sign->token.type == TokenType::GEQ) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::fgeq));
+                }
             }
         }
     }
@@ -1043,6 +1330,7 @@ void frontend::Analyzer::AnalyzeRelExp(RelExp* root) {
 }
 
 void frontend::Analyzer::AnalyzeEqExp(EqExp* root) {
+    log("EqExp");
     if(root->children.size() == 1) { // 只有一个儿子 直接继承
         RelExp* relexp = (RelExp*) root->children[0];
         AnalyzeRelExp(relexp);
@@ -1050,46 +1338,94 @@ void frontend::Analyzer::AnalyzeEqExp(EqExp* root) {
         return;
     }
     root->is_computable = true;
-    root->v = get_tmp_var();
+    std::string tmp_int = get_tmp_var(), tmp_float = get_tmp_f_var();
+    // root->v = get_tmp_var(); 先不赋值
     store_tmp();
-    int back_tmp = tmp_cnt;
+    int is_int = 1;
     for(int i = 0; i < root->children.size(); i += 2) {
         RelExp* relexp = (RelExp*) root->children[i];
         AnalyzeRelExp(relexp);
         root->is_computable &= relexp->is_computable;
+        is_int &= (relexp->t == Type::Int || relexp->t == Type::IntLiteral);
     }
     if(root->is_computable) {
-        int temp = std::stoi(((RelExp*) root->children[0])->v);
-        for(int i = 2; i < root->children.size(); i += 2) {
-            RelExp* relexp = (RelExp*) root->children[i];
-            Term* sign = (Term*) root->children[i - 1];
-            int nowval = std::stoi(relexp->v);
-            if(sign->token.type == TokenType::EQL) {
-                temp = (temp == nowval);
-            } else if(sign->token.type == TokenType::NEQ) {
-                temp = (temp != nowval);
+        if(is_int) {
+            int temp = std::stoi(((RelExp*) root->children[0])->v);
+            for(int i = 2; i < root->children.size(); i += 2) {
+                RelExp* relexp = (RelExp*) root->children[i];
+                Term* sign = (Term*) root->children[i - 1];
+                int nowval = std::stoi(relexp->v);
+                if(sign->token.type == TokenType::EQL) {
+                    temp = (temp == nowval);
+                } else if(sign->token.type == TokenType::NEQ) {
+                    temp = (temp != nowval);
+                }
             }
+            root->v = std::to_string(temp);
+            root->t = Type::IntLiteral;
+        } else {
+            float temp = std::stof(((RelExp*) root->children[0])->v);
+            for(int i = 2; i < root->children.size(); i += 2) {
+                RelExp* relexp = (RelExp*) root->children[i];
+                Term* sign = (Term*) root->children[i - 1];
+                float nowval = std::stof(relexp->v);
+                if(sign->token.type == TokenType::EQL) {
+                    temp = (temp == nowval);
+                } else if(sign->token.type == TokenType::NEQ) {
+                    temp = (temp != nowval);
+                }
+            }
+            root->v = std::to_string(temp);
+            root->t = Type::FloatLiteral;
         }
-        root->v = std::to_string(temp);
-        root->t = Type::IntLiteral;
     } else {
-        root->t = Type::Int;
-        RelExp* initu = (RelExp*) root->children[0];
-        current_func->addInst(new Instruction(Operand(initu->v, initu->t), Operand(), Operand(root->v, root->t), Operator::mov));
-        for(int i = 2; i < root->children.size(); i += 2) {
-            RelExp* relexp = (RelExp*) root->children[i];
-            Term* sign = (Term*) root->children[i - 1];
-            std::string uid;
-            if(relexp->t == Type::IntLiteral) {
-                uid = get_tmp_var();
-                current_func->addInst(new Instruction(Operand(relexp->v, relexp->t), Operand(), Operand(uid, Type::Int), Operator::mov));
-            } else {
-                uid = relexp->v;
+        if(is_int) {
+            root->v = tmp_int;
+            root->t = Type::Int;
+            RelExp* initu = (RelExp*) root->children[0];
+            Instruction* movinst = new Instruction(Operand(initu->v, initu->t), Operand(), Operand(root->v, root->t), Operator::mov);
+            insert_inst(movinst);
+
+            for(int i = 2; i < root->children.size(); i += 2) {
+                RelExp* relexp = (RelExp*) root->children[i];
+                Term* sign = (Term*) root->children[i - 1];
+                std::string uid;
+                if(relexp->t == Type::IntLiteral) {
+                    uid = get_tmp_var();
+                    current_func->addInst(new Instruction(Operand(relexp->v, relexp->t), Operand(), Operand(uid, Type::Int), Operator::mov));
+                } else {
+                    uid = relexp->v;
+                }
+                if(sign->token.type == TokenType::EQL) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::eq));
+                } else if(sign->token.type == TokenType::NEQ) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::neq));
+                }
             }
-            if(sign->token.type == TokenType::EQL) {
-                current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::eq));
-            } else if(sign->token.type == TokenType::NEQ) {
-                current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::neq));
+        } else {
+            root->v = tmp_float;
+            root->t = Type::Float;
+            RelExp* initu = (RelExp*) root->children[0];
+            Instruction* movinst = new Instruction(Operand(initu->v, initu->t), Operand(), Operand(root->v, root->t), Operator::fmov);
+            insert_inst(movinst);
+
+            for(int i = 2; i < root->children.size(); i += 2) {
+                RelExp* relexp = (RelExp*) root->children[i];
+                Term* sign = (Term*) root->children[i - 1];
+                std::string uid;
+                if(relexp->t == Type::FloatLiteral || relexp->t == Type::IntLiteral) {
+                    uid = get_tmp_f_var();
+                    current_func->addInst(new Instruction(Operand(relexp->v, Type::FloatLiteral), Operand(), Operand(uid, Type::Float), Operator::fmov));
+                } else if(relexp->t == Type::Float) {
+                    uid = relexp->v;
+                } else {
+                    uid = int_to_float(Operand(relexp->v, relexp->t)).name;
+                }
+                if(sign->token.type == TokenType::EQL) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::feq));
+                } else if(sign->token.type == TokenType::NEQ) {
+                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::fneq));
+                }
             }
         }
     }
@@ -1102,7 +1438,7 @@ void frontend::Analyzer::AnalyzeLAndExp(LAndExp* root) {
     AnalyzeEqExp(eqexp);
 
     if(eqexp->is_computable) {
-        if(eqexp->v == "0") {
+        if(eqexp->v == "0" || std::stof(eqexp->v) == 0) {
             return;
         } else {
             if(root->children.size() > 1) {
@@ -1122,15 +1458,31 @@ void frontend::Analyzer::AnalyzeLAndExp(LAndExp* root) {
         } 
     } else {
         // goto next or
-        insert_inst(new Instruction(
-            Operand(eqexp->v, eqexp->t),
-            Operand(),
-            Operand(eqexp->v, eqexp->t),
-            Operator::_not
-        ));
+        Operand goto_checker;
+        if(eqexp->t == Type::Int) {
+            insert_inst(new Instruction(
+                Operand(eqexp->v, eqexp->t),
+                Operand("0", Type::IntLiteral),
+                Operand(eqexp->v, eqexp->t),
+                Operator::eq
+            ));
+            goto_checker = Operand(eqexp->v, eqexp->t);
+        } else {
+            store_tmp();
+            goto_checker = Operand(get_tmp_f_var(), Type::Float);
+            insert_inst(new Instruction(
+                Operand(eqexp->v, eqexp->t),
+                Operand("0", Type::FloatLiteral),
+                goto_checker,
+                Operator::feq
+            ));
+            restore_tmp();
+            goto_checker = float_to_int(goto_checker);
+        }
+
         int pos = current_func->InstVec.size();
         Instruction *goto_next_or = new Instruction(
-            Operand(eqexp->v, eqexp->t),
+            goto_checker,
             Operand(),
             Operand("assert", Type::IntLiteral),
             Operator::_goto

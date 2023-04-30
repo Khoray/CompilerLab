@@ -12,3 +12,5 @@ mulexp+mulexp。。。。的时候后续的mulexp没有用临时变量存起来
 直接继承的时候int要不要转成bool类型？
 
 int b; 没有赋值
+
+左边赋值的左值不需要计算load

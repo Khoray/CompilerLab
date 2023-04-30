@@ -93,7 +93,7 @@ struct SymbolTable{
 // singleton class
 struct Analyzer {
     int tmp_cnt;
-    int tmp_cnt_float;
+    int tmp_f_cnt;
     vector<ir::Instruction*> g_init_inst;
     SymbolTable symbol_table;
     ir::Function* current_func;
@@ -106,13 +106,15 @@ struct Analyzer {
      * @brief constructor
      */
     Analyzer();
-
+    std::string get_tmp_f_var();
     std::string get_tmp_var();
     
     void store_tmp();
     void restore_tmp();
 
-    void release_tmp_var(int cnt);
+    ir::Operand int_to_float(ir::Operand op);
+    ir::Operand float_to_int(ir::Operand op);
+
     ir::Operand literal_to_var(ir::Operand op);
 
 
@@ -139,7 +141,7 @@ struct Analyzer {
     void AnalyzeStmt(Stmt*);
     void AnalyzeExp(Exp*);
     void AnalyzeCond(Cond*);
-    void AnalyzeLVal(LVal*);
+    void AnalyzeLVal(LVal*, int);
     void AnalyzeNumber(Number*);
     void AnalyzePrimaryExp(PrimaryExp*);
     void AnalyzeUnaryExp(UnaryExp*);

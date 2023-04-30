@@ -7,8 +7,8 @@
 #include<iostream>
 
 #define TODO assert(0 && "TODO");
-// #define DEBUG_EXEC_BRIEF  1
-// #define DEBUG_EXEC_DETAIL 1
+#define DEBUG_EXEC_BRIEF  1
+#define DEBUG_EXEC_DETAIL 1
 
 using ir::Type;
 
@@ -55,6 +55,7 @@ ir::Value ir::Executor::find_src_operand(Operand op) {
         assert(iter != global_vars.end() && "can not find the arguement in current conxtext or global variables");
     } 
     retval = iter->second;
+    std::cerr << (int) retval.t << "testval.t\n";
     assert(retval.t == op.type && "type not match");
 #if (DEBUG_EXEC_DETAIL)
     std::cout << ", value = ";
@@ -201,6 +202,10 @@ bool ir::Executor::exec_ir(size_t n) {
                         tmpst.push(u);
                         cxt_stack.pop();
                         std::cerr << u->pfunc->name << " " << u->pc << "\n";
+                        auto it = u->mem.find("t19");
+                        if(it != u->mem.end()) {
+                            std::cerr << "main7type2:" << (int) it->second.t << "\n";
+                        }
                     }
                     while(tmpst.size()) {
                         Context* u = tmpst.top();
@@ -210,6 +215,7 @@ bool ir::Executor::exec_ir(size_t n) {
                     std::cerr << "stack-------------\n";
                     cur_ctx = cxt_stack.top();
                     cxt_stack.pop();
+                    
                 }
             } break;
             case Operator::_goto: {
@@ -273,6 +279,7 @@ bool ir::Executor::exec_ir(size_t n) {
                             break;
                         case Type::Float:
                         case Type::FloatLiteral:
+                            std::cerr << "para:" << para.name << " " << (int) para.type << "\n";
                             assert(para.type == Type::Float);
                             break;                        
                         // pointers
@@ -285,6 +292,8 @@ bool ir::Executor::exec_ir(size_t n) {
                     }
                     cur_ctx->pc++;
                     cxt_stack.push(cur_ctx);
+                    
+                    
                     std::cerr << "stack.size()-------------" << cxt_stack.size() << "\n";
                     std::stack<Context*> tmpst;
                     while(cxt_stack.size()) {
@@ -292,6 +301,10 @@ bool ir::Executor::exec_ir(size_t n) {
                         tmpst.push(u);
                         cxt_stack.pop();
                         std::cerr << u->pfunc->name << " " << u->pc << "\n";
+                        auto it = u->mem.find("t19");
+                        if(it != u->mem.end()) {
+                            std::cerr << "main7type:" << (int) it->second.t << "\n";
+                        }
                     }
                     while(tmpst.size()) {
                         Context* u = tmpst.top();
@@ -425,7 +438,7 @@ bool ir::Executor::exec_ir(size_t n) {
                     assert(0 && "in Operator::fdef[fmov], op1 has a wrong type");
                 }
 #if (DEBUG_EXEC_DETAIL)
-                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.ival << std::endl;
+                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.fval << std::endl;
 #endif
             } break;
             case Operator::cvt_i2f: {
@@ -609,6 +622,7 @@ bool ir::Executor::exec_ir(size_t n) {
                     default:
                         assert(0 && "should not reach hear!");
                 }
+                
 #if (DEBUG_EXEC_DETAIL)
                     std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.fval << std::endl;
 #endif
