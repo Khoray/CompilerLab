@@ -55,7 +55,7 @@ ir::Value ir::Executor::find_src_operand(Operand op) {
         assert(iter != global_vars.end() && "can not find the arguement in current conxtext or global variables");
     } 
     retval = iter->second;
-    std::cerr << (int) retval.t << "testval.t\n";
+    // std::cerr << (int) retval.t << "testval.t\n";
     assert(retval.t == op.type && "type not match");
 #if (DEBUG_EXEC_DETAIL)
     std::cout << ", value = ";
@@ -195,24 +195,24 @@ bool ir::Executor::exec_ir(size_t n) {
                     cxt_stack.pop();
                 }
                 else {
-                    std::cerr << "stack-------------\n";
-                    std::stack<Context*> tmpst;
-                    while(cxt_stack.size()) {
-                        Context* u = cxt_stack.top();
-                        tmpst.push(u);
-                        cxt_stack.pop();
-                        std::cerr << u->pfunc->name << " " << u->pc << "\n";
-                        auto it = u->mem.find("t19");
-                        if(it != u->mem.end()) {
-                            std::cerr << "main7type2:" << (int) it->second.t << "\n";
-                        }
-                    }
-                    while(tmpst.size()) {
-                        Context* u = tmpst.top();
-                        cxt_stack.push(u);
-                        tmpst.pop();
-                    }
-                    std::cerr << "stack-------------\n";
+                    // std::cerr << "stack-------------\n";
+                    // std::stack<Context*> tmpst;
+                    // while(cxt_stack.size()) {
+                    //     Context* u = cxt_stack.top();
+                    //     tmpst.push(u);
+                    //     cxt_stack.pop();
+                    //     std::cerr << u->pfunc->name << " " << u->pc << "\n";
+                    //     auto it = u->mem.find("t19");
+                    //     if(it != u->mem.end()) {
+                    //         std::cerr << "main7type2:" << (int) it->second.t << "\n";
+                    //     }
+                    // }
+                    // while(tmpst.size()) {
+                    //     Context* u = tmpst.top();
+                    //     cxt_stack.push(u);
+                    //     tmpst.pop();
+                    // }
+                    // std::cerr << "stack-------------\n";
                     cur_ctx = cxt_stack.top();
                     cxt_stack.pop();
                     
@@ -279,7 +279,7 @@ bool ir::Executor::exec_ir(size_t n) {
                             break;
                         case Type::Float:
                         case Type::FloatLiteral:
-                            std::cerr << "para:" << para.name << " " << (int) para.type << "\n";
+                            // std::cerr << "para:" << para.name << " " << (int) para.type << "\n";
                             assert(para.type == Type::Float);
                             break;                        
                         // pointers
@@ -294,24 +294,24 @@ bool ir::Executor::exec_ir(size_t n) {
                     cxt_stack.push(cur_ctx);
                     
                     
-                    std::cerr << "stack.size()-------------" << cxt_stack.size() << "\n";
-                    std::stack<Context*> tmpst;
-                    while(cxt_stack.size()) {
-                        Context* u = cxt_stack.top();
-                        tmpst.push(u);
-                        cxt_stack.pop();
-                        std::cerr << u->pfunc->name << " " << u->pc << "\n";
-                        auto it = u->mem.find("t19");
-                        if(it != u->mem.end()) {
-                            std::cerr << "main7type:" << (int) it->second.t << "\n";
-                        }
-                    }
-                    while(tmpst.size()) {
-                        Context* u = tmpst.top();
-                        cxt_stack.push(u);
-                        tmpst.pop();
-                    }
-                    std::cerr << "stack-------------\n";
+                    // std::cerr << "stack.size()-------------" << cxt_stack.size() << "\n";
+                    // std::stack<Context*> tmpst;
+                    // while(cxt_stack.size()) {
+                    //     Context* u = cxt_stack.top();
+                    //     tmpst.push(u);
+                    //     cxt_stack.pop();
+                    //     std::cerr << u->pfunc->name << " " << u->pc << "\n";
+                    //     auto it = u->mem.find("t19");
+                    //     if(it != u->mem.end()) {
+                    //         std::cerr << "main7type:" << (int) it->second.t << "\n";
+                    //     }
+                    // }
+                    // while(tmpst.size()) {
+                    //     Context* u = tmpst.top();
+                    //     cxt_stack.push(u);
+                    //     tmpst.pop();
+                    // }
+                    // std::cerr << "stack-------------\n";
                     cur_ctx = cxt;
                 } 
                 else {
