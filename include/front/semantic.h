@@ -100,6 +100,7 @@ struct Analyzer {
     ir::Program program;
     Cond* last_cond;
     vector<Stmt*> last_while;
+    vector<int> tmp_stack;
 
     /**
      * @brief constructor
@@ -107,6 +108,9 @@ struct Analyzer {
     Analyzer();
 
     std::string get_tmp_var();
+    
+    void store_tmp();
+    void restore_tmp();
 
     void release_tmp_var(int cnt);
     ir::Operand literal_to_var(ir::Operand op);

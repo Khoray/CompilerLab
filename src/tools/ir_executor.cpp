@@ -7,8 +7,8 @@
 #include<iostream>
 
 #define TODO assert(0 && "TODO");
-#define DEBUG_EXEC_BRIEF  1
-#define DEBUG_EXEC_DETAIL 1
+// #define DEBUG_EXEC_BRIEF  1
+// #define DEBUG_EXEC_DETAIL 1
 
 using ir::Type;
 
