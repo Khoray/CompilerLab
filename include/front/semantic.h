@@ -101,6 +101,7 @@ struct Analyzer {
     Cond* last_cond;
     vector<Stmt*> last_while;
     vector<int> tmp_stack;
+    vector<int> tmp_f_stack;
 
     /**
      * @brief constructor

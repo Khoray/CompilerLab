@@ -58,16 +58,6 @@ string frontend::SymbolTable::get_scoped_name(string id) const {
     return id;
 }
 
-Operand frontend::SymbolTable::get_operand(string id) const {
-    TODO;
-    for(int i = scope_stack.size() - 1; i >= 0; i--) {
-        if(scope_stack[i].table.count(id)) {
-            return scope_stack[i].table.find(id)->second.operand;
-        }
-    }
-    assert(0 && "global");
-}
-
 frontend::STE frontend::SymbolTable::get_ste(string id) const {
     for(int i = scope_stack.size() - 1; i >= 0; i--) {
         if(scope_stack[i].table.count(id)) {
@@ -75,6 +65,7 @@ frontend::STE frontend::SymbolTable::get_ste(string id) const {
         }
     }
     assert(0 && "gg");
+    return STE();
 }
 
 frontend::Analyzer::Analyzer(): tmp_cnt(0), tmp_f_cnt(0), symbol_table(), current_func(nullptr) {
@@ -108,11 +99,14 @@ std::string frontend::Analyzer::get_tmp_f_var() {
 
 void frontend::Analyzer::store_tmp() {
     tmp_stack.push_back(tmp_cnt);
+    tmp_f_stack.push_back(tmp_f_cnt);
 }
 
 void frontend::Analyzer::restore_tmp() {
     tmp_cnt = tmp_stack.back();
     tmp_stack.pop_back();
+    tmp_f_cnt = tmp_f_stack.back();
+    tmp_f_stack.pop_back();
 }
 
 Operand frontend::Analyzer::literal_to_var(Operand op) {
@@ -198,7 +192,10 @@ Operand frontend::Analyzer::convert_type(Operand op, Type target) {
         }
     } else {
         assert(0);
+        return op;
     }
+    assert(0);
+    return op;
 }
 
 void frontend::Analyzer::insert_ste(std::string name, STE ste) {
@@ -331,8 +328,10 @@ void frontend::Analyzer::AnalyzeConstInitVal(int &index, STE& ste, int res, int 
             Operand op1 = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
             Operand op2 = Operand(std::to_string(index), Type::IntLiteral);
             Operand des = Operand("0", ste.operand.type == Type::IntPtr ? Type::IntLiteral : Type::FloatLiteral);
+            store_tmp();
             des = literal_to_var(des);
             insert_inst(new Instruction(op1, op2, des, Operator::store));
+            restore_tmp();
         }
     } else {
         // calc constexp val
@@ -348,8 +347,10 @@ void frontend::Analyzer::AnalyzeConstInitVal(int &index, STE& ste, int res, int 
             // store des should be int or float, should not be intliteral or float literal
             std::string temp = get_tmp_var();
             Operand des = Operand(constexp->v, constexp->t);
+            store_tmp();
             des = literal_to_var(des);
             insert_inst(new Instruction(op1, op2, des, Operator::store));
+            restore_tmp();
             index++;
         } else {
             ste.operand.name = ((ConstExp*) root->children[0])->v;
@@ -418,8 +419,10 @@ void frontend::Analyzer::AnalyzeVarDef(VarDef* root) {
                 Operand op1 = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
                 Operand op2 = Operand(std::to_string(i), Type::IntLiteral);
                 Operand des = Operand("0", ste.operand.type == Type::IntPtr ? Type::IntLiteral : Type::FloatLiteral);
+                store_tmp();
                 des = literal_to_var(des);
                 insert_inst(new Instruction(op1, op2, des, Operator::store));
+                restore_tmp();
             }
         } else {
             Operand op1 = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
@@ -435,7 +438,7 @@ void frontend::Analyzer::AnalyzeVarDef(VarDef* root) {
 
 void frontend::Analyzer::AnalyzeInitVal(int& index, STE& ste, int res, int level, InitVal* root) {
     log("InitVal");
-    int back_cnt = tmp_cnt;
+    store_tmp();
     if(root->children[0]->type == NodeType::TERMINAL) {
         int ptr = 1;
         int init_index = index;
@@ -447,8 +450,10 @@ void frontend::Analyzer::AnalyzeInitVal(int& index, STE& ste, int res, int level
             Operand op1 = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
             Operand op2 = Operand(std::to_string(index), Type::IntLiteral);
             Operand des = Operand("0", ste.operand.type == Type::IntPtr ? Type::IntLiteral : Type::FloatLiteral);
+            store_tmp();
             des = literal_to_var(des);
             insert_inst(new Instruction(op1, op2, des, Operator::store));
+            restore_tmp();
         }
     } else {
         // calc constexp val
@@ -464,9 +469,11 @@ void frontend::Analyzer::AnalyzeInitVal(int& index, STE& ste, int res, int level
                 // store des should be int or float, should not be intliteral or float literal
 
                 Operand des = Operand(ch->v, ste.operand.type == Type::IntPtr ? Type::IntLiteral : Type::FloatLiteral);
+                store_tmp();
                 des = literal_to_var(des);
 
                 insert_inst(new Instruction(op1, op2, des, Operator::store));
+                restore_tmp();
             } else {
                 Operand des = Operand(ch->v, ste.operand.type == Type::IntPtr ? Type::Int : Type::Float);
                 insert_inst(new Instruction(op1, op1, des, Operator::store));
@@ -511,6 +518,7 @@ void frontend::Analyzer::AnalyzeInitVal(int& index, STE& ste, int res, int level
             }
         }
     }
+    restore_tmp();
 }
 
 void frontend::Analyzer::AnalyzeFuncDef(FuncDef* root) {
@@ -751,9 +759,11 @@ void frontend::Analyzer::AnalyzeStmt(Stmt* root) {
             Operand op1 = Operand(symbol_table.get_scoped_name(lval->id), lval->t == Type::Int ? Type::IntPtr : Type::FloatPtr);
             Operand op2 = Operand(lval->i, Type::Int);
             Operand des = Operand(exp->v, exp->t);
+            store_tmp();
             des = convert_type(des, lval->t);
             std::cerr << "lval->t: stmt:" << (int) lval->t << "\n";
             current_func->addInst(new Instruction(op1, op2, des, Operator::store));
+            restore_tmp();
         } else {
             Operand op1 = Operand(exp->v, exp->t);
             Operand op2 = Operand();
@@ -905,7 +915,6 @@ void frontend::Analyzer::AnalyzePrimaryExp(PrimaryExp* root) {
         std::string tmp_int = get_tmp_var(), tmp_float = get_tmp_f_var();
         // root->v = ; 先不赋值
         store_tmp();
-        int back_tmp = tmp_cnt;
         LVal* lval = (LVal*) root->children[0];
         AnalyzeLVal(lval, 1);
         if(lval->t == Type::IntLiteral || lval->t == Type::FloatLiteral || lval->t == Type::IntPtr || lval->t == Type::FloatPtr) {
@@ -959,17 +968,17 @@ void frontend::Analyzer::AnalyzeUnaryExp(UnaryExp* root) {
             if(unaryOp->op == TokenType::NOT) {
                 insert_inst(new Instruction(Operand(root->v, root->t), Operand(), Operand(root->v, root->t), Operator::_not));
             } else if(unaryOp->op == TokenType::MINU) {
+                store_tmp();
                 if(root->t == Type::Int) {
                     std::string zero = get_tmp_var();
                     insert_inst(new Instruction(Operand("0", Type::IntLiteral), Operand(), Operand(zero, Type::Int), Operator::mov));
                     insert_inst(new Instruction(Operand(zero, Type::Int), Operand(root->v, root->t), Operand(root->v, root->t), Operator::sub));
-                    tmp_cnt--;
                 } else {
                     std::string zero = get_tmp_f_var();
                     insert_inst(new Instruction(Operand("0", Type::FloatLiteral), Operand(), Operand(zero, Type::Float), Operator::fmov));
                     insert_inst(new Instruction(Operand(zero, Type::Float), Operand(root->v, root->t), Operand(root->v, root->t), Operator::fsub));
-                    tmp_cnt--;
                 }
+                restore_tmp();
             }
         }
     } else {
@@ -1003,22 +1012,8 @@ void frontend::Analyzer::AnalyzeUnaryExp(UnaryExp* root) {
 
                 if(sc.type == Type::IntPtr || sc.type == Type::FloatPtr) {
                     // donothing
-                } else if(sc.type == Type::Int) {
-                    if(xc.type == Type::IntLiteral || xc.type == Type::FloatLiteral) {
-                        paras[i] = literal_to_var(Operand(xc.name, Type::IntLiteral));
-                    } else if(xc.type == Type::Int) {
-                        // do nothing
-                    } else if(xc.type == Type::Float) {
-                        paras[i] = float_to_int(xc);
-                    }
-                } else if(sc.type == Type::Float) {
-                    if(xc.type == Type::IntLiteral || xc.type == Type::FloatLiteral) {
-                        paras[i] = literal_to_var(Operand(xc.name, Type::FloatLiteral));
-                    } else if(xc.type == Type::Int) {
-                        paras[i] = int_to_float(xc);
-                    } else if(xc.type == Type::Float) {
-                        // do nothing
-                    }
+                } else {
+                    paras[i] = convert_type(xc, sc.type);
                 }
             }
             current_func->addInst(new ir::CallInst(Operand(funcname, func->returnType), paras, Operand(ret_tmp, func->returnType)));
@@ -1136,6 +1131,7 @@ void frontend::Analyzer::AnalyzeMulExp(MulExp* root) {
             }
         } else {
             root->v = tmp_float;
+            std::cerr << " now_tmp_float:" << tmp_float << "\n";
             root->t = Type::Float;
 
             for(int i = 0; i < root->children.size(); i += 2) {
@@ -1147,11 +1143,13 @@ void frontend::Analyzer::AnalyzeMulExp(MulExp* root) {
                     current_func->addInst(new Instruction(Operand(unaryexp->v, Type::FloatLiteral), Operand(), Operand(uid, Type::Float), Operator::fmov));
                 } else if(unaryexp->t == Type::Float) {
                     uid = unaryexp->v;
+                std::cerr << i << " uid:" << uid << " ke:" << tmp_f_cnt << "\n";
                 } else {
                     uid = int_to_float(Operand(unaryexp->v, unaryexp->t)).name;
                 }
                 if(i == 0) {
                     root->v = uid;
+                    tmp_f_stack.back() = tmp_f_cnt; // TODO
                     continue;
                 }
                 if(sign->token.type == TokenType::MULT) {
@@ -1256,6 +1254,7 @@ void frontend::Analyzer::AnalyzeAddExp(AddExp* root) {
                 }
                 if(i == 0) {
                     root->v = uid;
+                    tmp_f_stack.back() = tmp_f_cnt; // TODO
                     continue;
                 }
                 if(sign->token.type == TokenType::PLUS) {
@@ -1372,6 +1371,7 @@ void frontend::Analyzer::AnalyzeRelExp(RelExp* root) {
                 }
                 if(i == 0) {
                     root->v = uid;
+                    tmp_f_stack.back() = tmp_f_cnt; // TODO
                     continue;
                 }
                 if(sign->token.type == TokenType::LSS) {
@@ -1480,6 +1480,7 @@ void frontend::Analyzer::AnalyzeEqExp(EqExp* root) {
                 }
                 if(i == 0) {
                     root->v = uid;
+                    tmp_f_stack.back() = tmp_f_cnt; // TODO
                     continue;
                 }
                 if(sign->token.type == TokenType::EQL) {

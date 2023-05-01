@@ -68,6 +68,18 @@ int main(int argc, char** argv) {
         output_file << program.draw();
     }
 
+    // check for IR
+    if(step == "-s2e") {
+        auto output_file_name = des;
+        auto input_file_name = src.substr(0,src.size()-2) + "in";
+        ir::reopen_output_file =  fopen(output_file_name.c_str(), "w");
+        ir::reopen_input_file =  fopen(input_file_name.c_str(), "r");
+
+        auto executor = ir::Executor(&program);
+        std::cout << (uint8_t) executor.run();
+        fprintf(ir::reopen_output_file, "\n%s", program.draw().c_str());
+    }
+
     // compiler <src_filename> -e -o <output_filename>
     if(step == "-e") {
         auto output_file_name = des;
