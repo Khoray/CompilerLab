@@ -116,6 +116,7 @@ struct Analyzer {
     ir::Operand float_to_int(ir::Operand op);
 
     ir::Operand literal_to_var(ir::Operand op);
+    ir::Operand convert_type(ir::Operand op, ir::Type target);
 
 
     // analysis functions

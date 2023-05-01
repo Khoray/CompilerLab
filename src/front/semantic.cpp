@@ -116,7 +116,6 @@ void frontend::Analyzer::restore_tmp() {
 }
 
 Operand frontend::Analyzer::literal_to_var(Operand op) {
-    
     Operand des;
     if(op.type == Type::IntLiteral) {
         std::string temp = get_tmp_var();
@@ -167,6 +166,39 @@ Operand frontend::Analyzer::int_to_float(Operand op) {
     ));
     
     return des;
+}
+
+
+Operand frontend::Analyzer::convert_type(Operand op, Type target) {
+    assert(target == Type::Int || target == Type::Float);
+    if(op.type == Type::Int) {
+        if(target == Type::Int) {
+            return op;
+        } else if(target == Type::Float) {
+            return int_to_float(op);
+        }
+    } else if(op.type == Type::Float) {
+        if(target == Type::Int) {
+            return float_to_int(op);
+        } else if(target == Type::Float) {
+            return op;
+        }
+    } else if(op.type == Type::IntLiteral) {
+        if(target == Type::Int) {
+            return literal_to_var(op);
+        } else if(target == Type::Float) {
+            return literal_to_var(Operand(op.name, Type::FloatLiteral));
+        }
+    } else if(op.type == Type::FloatLiteral) {
+        if(target == Type::Int) {
+            int t = std::stof(op.name);
+            return literal_to_var(Operand(std::to_string(t), Type::IntLiteral));
+        } else if(target == Type::Float) {
+            return literal_to_var(op);
+        }
+    } else {
+        assert(0);
+    }
 }
 
 void frontend::Analyzer::insert_ste(std::string name, STE ste) {
@@ -715,19 +747,18 @@ void frontend::Analyzer::AnalyzeStmt(Stmt* root) {
             // lval是一个指针 case2.1
 
             // 目前只有int
-            Operand op1 = Operand(symbol_table.get_scoped_name(lval->id), Type::IntPtr);
+
+            Operand op1 = Operand(symbol_table.get_scoped_name(lval->id), lval->t == Type::Int ? Type::IntPtr : Type::FloatPtr);
             Operand op2 = Operand(lval->i, Type::Int);
             Operand des = Operand(exp->v, exp->t);
-            if(exp->t == Type::IntLiteral) {
-                des = literal_to_var(des);
-            }
+            des = convert_type(des, lval->t);
+            std::cerr << "lval->t: stmt:" << (int) lval->t << "\n";
             current_func->addInst(new Instruction(op1, op2, des, Operator::store));
         } else {
-
             Operand op1 = Operand(exp->v, exp->t);
             Operand op2 = Operand();
             Operand des = Operand(symbol_table.get_scoped_name(lval->v), lval->t);
-            current_func->addInst(new Instruction(op1, op2, des, Operator::mov));
+            current_func->addInst(new Instruction(op1, op2, des, lval->t == Type::Int ? Operator::mov : Operator::fmov));
         }
     }
 }
@@ -760,7 +791,7 @@ void frontend::Analyzer::AnalyzeLVal(LVal* root, int needload) {
         // root->v 
         std::string tmp_int = get_tmp_var(), tmp_float = get_tmp_f_var();
         // root->v = get_tmp_var(); 先不赋值
-        root->t = Type::Int;
+        root->t = ste.operand.type == Type::IntPtr ? Type::Int : Type::Float;
         std::string index = get_tmp_var();
         store_tmp();
         Instruction *assignIndex = new Instruction(Operand("0", Type::IntLiteral), Operand(), Operand(index, Type::Int), Operator::mov);

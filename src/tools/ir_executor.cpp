@@ -5,10 +5,11 @@
 #include<stdio.h>
 #include<cassert>
 #include<iostream>
+#include<iomanip>
 
 #define TODO assert(0 && "TODO");
-#define DEBUG_EXEC_BRIEF  1
-#define DEBUG_EXEC_DETAIL 1
+// #define DEBUG_EXEC_BRIEF  1
+// #define DEBUG_EXEC_DETAIL 1
 
 using ir::Type;
 
@@ -409,7 +410,7 @@ bool ir::Executor::exec_ir(size_t n) {
                     assert(0 && "in Operator::def[mov], op1 has a wrong type");
                 }
 #if (DEBUG_EXEC_DETAIL)
-                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.ival << std::endl;
+                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.ival << " " << pvalue->_val.fval << " end" << std::endl;
 #endif
             } break;
             case Operator::_not: {
@@ -424,7 +425,7 @@ bool ir::Executor::exec_ir(size_t n) {
                 }
                 pvalue->_val.ival = (value == 0);
 #if (DEBUG_EXEC_DETAIL)
-                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.ival << std::endl;
+                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.ival << " " << pvalue->_val.fval << " end" << std::endl;
 #endif
             } break;
             case Operator::fdef: 
@@ -467,7 +468,7 @@ bool ir::Executor::exec_ir(size_t n) {
                     assert(0 && "in Operator::cvt_f2i, op1 has a wrong type");
                 }
 #if (DEBUG_EXEC_DETAIL)
-                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.ival << std::endl;
+                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.ival << " " << pvalue->_val.fval << " end" << std::endl;
 #endif
             } break;
             // 2 int operand
@@ -547,7 +548,7 @@ bool ir::Executor::exec_ir(size_t n) {
                         assert(0 && "should not reach hear!");
                 }
 #if (DEBUG_EXEC_DETAIL)
-                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.ival << std::endl;
+                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.ival << " " << pvalue->_val.fval << " end" << std::endl;
 #endif
             } break;
             case Operator::addi: 
@@ -724,6 +725,7 @@ FILE* ir::reopen_input_file = nullptr;
 int getint() {
     int t; 
     fscanf(ir::reopen_input_file, "%d",&t); 
+    std::cerr << "n:" << t << "\n";
     return t; 
 }
 
@@ -735,7 +737,8 @@ int getch() {
 
 float getfloat(){
     float n;
-    fscanf(ir::reopen_input_file, "%a", &n);
+    fscanf(ir::reopen_input_file, "%f", &n);
+    std::cerr << "n:" << n << "\n";
     return n;
 }
 
@@ -750,7 +753,7 @@ int getfarray(float a[]) {
     int n;
     fscanf(ir::reopen_input_file, "%d", &n);
     for (int i = 0; i < n; i++) {
-        fscanf(ir::reopen_input_file, "%a", &a[i]);
+        fscanf(ir::reopen_input_file, "%f", &a[i]);
     }
     return n;
 }
