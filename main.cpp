@@ -9,6 +9,7 @@
 #include<cassert>
 #include<fstream>
 #include<iostream>
+#include<ctime>
 
 using std::string;
 using std::vector;
@@ -89,7 +90,9 @@ int main(int argc, char** argv) {
 
         auto executor = ir::Executor(&program);
         std::cout << program.draw();
+        clock_t start_time = clock();
         fprintf(ir::reopen_output_file, "\n%d", (uint8_t) executor.run());
+        std::cerr << "run time: " << clock() - start_time << "ms\n"; 
     }
     return 0;
 }

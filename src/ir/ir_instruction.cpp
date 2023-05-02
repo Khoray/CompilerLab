@@ -17,7 +17,6 @@ ir::CallInst::CallInst(const Operand &op1, const Operand &des)
     : Instruction(op1, Operand(), des, Operator::call), argumentList() {}
 
 std::string ir::CallInst::draw() const {
-    // std::cerr << "draw callinst:" << "\n";
     std::string res = "call " + this->des.name + ", " + this->op1.name + "(";
     for(const auto& arg: argumentList)
         res += arg.name + ", ";

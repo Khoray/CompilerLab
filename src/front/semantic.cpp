@@ -148,7 +148,6 @@ Operand frontend::Analyzer::float_to_int(Operand op) {
 }
 
 Operand frontend::Analyzer::int_to_float(Operand op) {
-    std::cerr << (int) op.type << "\n";
     assert(op.type == Type::Int && "in int to float, op type is not int");
     std::string temp = get_tmp_f_var();
     Operand des = Operand(temp, Type::Float);
@@ -338,7 +337,6 @@ void frontend::Analyzer::AnalyzeConstInitVal(int &index, STE& ste, int res, int 
         log("AnalyzeConstExp");
         ConstExp* constexp = ((ConstExp*) root->children[0]);
         AnalyzeConstExp(constexp);
-        std::cerr << "((ConstExp*) root->children[0])->v:" << ((ConstExp*) root->children[0])->v.c_str() << "\n";
         // store
         if(ste.operand.type == Type::IntPtr || ste.operand.type == Type::FloatPtr) {
             Operand op1 = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
@@ -528,7 +526,6 @@ void frontend::Analyzer::AnalyzeFuncDef(FuncDef* root) {
     std::string funcname = ((Term*) root->children[1])->token.value;
     Type functype = funcTypech->t;
     Function *fun = new Function(funcname, functype);
-    std::cerr << "test: func:" << int(fun->returnType) << "\n";
     if(funcname == "main") {
         ir::CallInst* callGlobal = new ir::CallInst(ir::Operand("global",ir::Type::null), ir::Operand("t0",ir::Type::null));
         fun->addInst(callGlobal);
@@ -588,7 +585,6 @@ void frontend::Analyzer::AnalyzeFuncFParam(FuncFParam* root) {
         }
     }
     ste.operand = Operand(id, is_ptr ? Btypech->t == Type::Int ? Type::IntPtr : Type::FloatPtr : Btypech->t);
-    std::cerr << "para.type:" << (int) ste.operand.type << "\n";
     insert_ste(ste.operand.name, ste);
     current_func->ParameterList.emplace_back(symbol_table.get_scoped_name(id), ste.operand.type);
 }
@@ -761,7 +757,6 @@ void frontend::Analyzer::AnalyzeStmt(Stmt* root) {
             Operand des = Operand(exp->v, exp->t);
             store_tmp();
             des = convert_type(des, lval->t);
-            std::cerr << "lval->t: stmt:" << (int) lval->t << "\n";
             current_func->addInst(new Instruction(op1, op2, des, Operator::store));
             restore_tmp();
         } else {
@@ -931,7 +926,6 @@ void frontend::Analyzer::AnalyzePrimaryExp(PrimaryExp* root) {
             root->v = tmp_float;
             root->t = Type::Float;
             root->is_computable = false;
-            std::cerr << "test lval mov:" << symbol_table.get_scoped_name(lval->v) << " " << (int) lval->t << "\n";
             Instruction* movinst = new Instruction(Operand(symbol_table.get_scoped_name(lval->v), lval->t), Operand(), Operand(root->v, root->t), Operator::fmov);
             insert_inst(movinst);
             log(movinst->draw().c_str());
@@ -1131,7 +1125,6 @@ void frontend::Analyzer::AnalyzeMulExp(MulExp* root) {
             }
         } else {
             root->v = tmp_float;
-            std::cerr << " now_tmp_float:" << tmp_float << "\n";
             root->t = Type::Float;
 
             for(int i = 0; i < root->children.size(); i += 2) {
@@ -1143,7 +1136,6 @@ void frontend::Analyzer::AnalyzeMulExp(MulExp* root) {
                     current_func->addInst(new Instruction(Operand(unaryexp->v, Type::FloatLiteral), Operand(), Operand(uid, Type::Float), Operator::fmov));
                 } else if(unaryexp->t == Type::Float) {
                     uid = unaryexp->v;
-                std::cerr << i << " uid:" << uid << " ke:" << tmp_f_cnt << "\n";
                 } else {
                     uid = int_to_float(Operand(unaryexp->v, unaryexp->t)).name;
                 }

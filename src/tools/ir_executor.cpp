@@ -8,8 +8,8 @@
 #include<iomanip>
 
 #define TODO assert(0 && "TODO");
-#define DEBUG_EXEC_BRIEF  1
-#define DEBUG_EXEC_DETAIL 1
+// #define DEBUG_EXEC_BRIEF  1
+// #define DEBUG_EXEC_DETAIL 1
 
 using ir::Type;
 
@@ -56,7 +56,6 @@ ir::Value ir::Executor::find_src_operand(Operand op) {
         assert(iter != global_vars.end() && "can not find the arguement in current conxtext or global variables");
     } 
     retval = iter->second;
-    // std::cerr << (int) retval.t << "testval.t\n";
     assert(retval.t == op.type && "type not match");
 #if (DEBUG_EXEC_DETAIL)
     std::cout << ", value = ";
@@ -348,7 +347,6 @@ bool ir::Executor::exec_ir(size_t n) {
                 else {
                     assert(0 && "in Operator::load, op2 should be integer");
                 }
-                std::cerr << int(inst->des.type) << " " << int(inst->op1.type) << "\n";
                 if (inst->des.type == Type::Int && inst->op1.type == Type::IntPtr) {
                     find_src_operand(inst->op1)._val.iptr[off] = find_src_operand(inst->des)._val.ival;
                 }
@@ -406,7 +404,6 @@ bool ir::Executor::exec_ir(size_t n) {
                     *pvalue = find_src_operand(inst->op1);
                 }
                 else {
-                    std::cerr << "op1 type:" << (int) inst->op1.type << "\n";
                     assert(0 && "in Operator::def[mov], op1 has a wrong type");
                 }
 #if (DEBUG_EXEC_DETAIL)
@@ -725,7 +722,6 @@ FILE* ir::reopen_input_file = nullptr;
 int getint() {
     int t; 
     fscanf(ir::reopen_input_file, "%d",&t); 
-    std::cerr << "n:" << t << "\n";
     return t; 
 }
 
@@ -738,7 +734,6 @@ int getch() {
 float getfloat(){
     float n;
     fscanf(ir::reopen_input_file, "%f", &n);
-    std::cerr << "n:" << n << "\n";
     return n;
 }
 

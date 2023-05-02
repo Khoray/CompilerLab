@@ -16,11 +16,9 @@ void ir::Program::addFunction(const ir::Function& proc) {
 }
 
 std::string ir::Program::draw() {
-    // std::cerr << "drawing program:\n";
     std::string ret;
     for (auto i :functions) {
         ret += i.draw();
-        // std::cerr << "function name:" << i.name << "\n";
     }
     ret += "GVT:\n";
     for (auto i : this->globalVal) {
