@@ -5,13 +5,11 @@
 #include<stdio.h>
 #include<cassert>
 #include<iostream>
+#include<iomanip>
 
 #define TODO assert(0 && "TODO");
-#define DEBUG_EXEC_BRIEF  1
-#define DEBUG_EXEC_DETAIL 0
-#define IS_INT_OPERAND(operand) (operand.type == Type::Int || operand.type == Type::IntLiteral)
-#define IS_FLOAT_OPERAND(operand) (operand.type == Type::Float || operand.type == Type::FloatLiteral)
-
+// #define DEBUG_EXEC_BRIEF  1
+// #define DEBUG_EXEC_DETAIL 1
 
 using ir::Type;
 
@@ -127,18 +125,10 @@ int ir::Executor::run() {
         if (gte.maxlen) {
             if (gte.val.type == Type::IntPtr) {
                 entry.second._val.iptr = new int[gte.maxlen];
-                // global variable need to init as 0
-                for (size_t i = 0; i < gte.maxlen; i++) {
-                    entry.second._val.iptr[i] = 0;
-                }
-                
+
             }
             else if (gte.val.type == Type::FloatPtr) {
                 entry.second._val.fptr = new float[gte.maxlen];
-                // global variable need to init as 0
-                for (size_t i = 0; i < gte.maxlen; i++) {
-                    entry.second._val.fptr[i] = 0;
-                }
             }
             else {
                 assert(0 && "wrong global value type with maxlen > 0");
@@ -165,7 +155,7 @@ int ir::Executor::run() {
     Value main_func_retval;
     cur_ctx->retval_addr = &main_func_retval;
     cxt_stack.push(cur_ctx);
-    while (cur_ctx) {
+    while (cxt_stack.size()) {
         exec_ir();
     }
     
@@ -174,7 +164,7 @@ int ir::Executor::run() {
 
 bool ir::Executor::exec_ir(size_t n) {
     while (n--) {
-        assert(cur_ctx->pc < cur_ctx->pfunc->InstVec.size());
+    
         auto inst = cur_ctx->pfunc->InstVec[cur_ctx->pc];
 #if (DEBUG_EXEC_BRIEF || DEBUG_EXEC_DETAIL)
     std::cout << cur_ctx->pc << ": " << inst->draw() << std::endl;
@@ -201,18 +191,36 @@ bool ir::Executor::exec_ir(size_t n) {
                     }
                 }
                 // switch context
-                if (cxt_stack.size()) {        // in main function return
-                    cur_ctx = cxt_stack.top();
+                if (cxt_stack.size() == 1) {        // in main function return
                     cxt_stack.pop();
                 }
                 else {
-                    delete cur_ctx;     // FIXME destructor for Context
-                    cur_ctx = nullptr;
+                    // std::cerr << "stack-------------\n";
+                    // std::stack<Context*> tmpst;
+                    // while(cxt_stack.size()) {
+                    //     Context* u = cxt_stack.top();
+                    //     tmpst.push(u);
+                    //     cxt_stack.pop();
+                    //     std::cerr << u->pfunc->name << " " << u->pc << "\n";
+                    //     auto it = u->mem.find("t19");
+                    //     if(it != u->mem.end()) {
+                    //         std::cerr << "main7type2:" << (int) it->second.t << "\n";
+                    //     }
+                    // }
+                    // while(tmpst.size()) {
+                    //     Context* u = tmpst.top();
+                    //     cxt_stack.push(u);
+                    //     tmpst.pop();
+                    // }
+                    // std::cerr << "stack-------------\n";
+                    cur_ctx = cxt_stack.top();
+                    cxt_stack.pop();
+                    
                 }
             } break;
             case Operator::_goto: {
                 int off = 0;
-                if (IS_INT_OPERAND(inst->des)) {
+                if (inst->des.type == Type::IntLiteral || inst->des.type == Type::Int) {
                     off = find_src_operand(inst->des)._val.ival;
                 }
                 else {
@@ -247,6 +255,7 @@ bool ir::Executor::exec_ir(size_t n) {
                 Context* cxt = nullptr;
                 for(auto& f: program->functions) {
                     if (f.name == fn) {
+                        
                         cxt = new Context(&f);
                     }
                 } 
@@ -270,6 +279,7 @@ bool ir::Executor::exec_ir(size_t n) {
                             break;
                         case Type::Float:
                         case Type::FloatLiteral:
+                            // std::cerr << "para:" << para.name << " " << (int) para.type << "\n";
                             assert(para.type == Type::Float);
                             break;                        
                         // pointers
@@ -282,15 +292,37 @@ bool ir::Executor::exec_ir(size_t n) {
                     }
                     cur_ctx->pc++;
                     cxt_stack.push(cur_ctx);
+                    
+                    
+                    // std::cerr << "stack.size()-------------" << cxt_stack.size() << "\n";
+                    // std::stack<Context*> tmpst;
+                    // while(cxt_stack.size()) {
+                    //     Context* u = cxt_stack.top();
+                    //     tmpst.push(u);
+                    //     cxt_stack.pop();
+                    //     std::cerr << u->pfunc->name << " " << u->pc << "\n";
+                    //     auto it = u->mem.find("t19");
+                    //     if(it != u->mem.end()) {
+                    //         std::cerr << "main7type:" << (int) it->second.t << "\n";
+                    //     }
+                    // }
+                    // while(tmpst.size()) {
+                    //     Context* u = tmpst.top();
+                    //     cxt_stack.push(u);
+                    //     tmpst.pop();
+                    // }
+                    // std::cerr << "stack-------------\n";
                     cur_ctx = cxt;
                 } 
                 else {
                     assert(0 && "could not find the function in ir::Program");
                 }
             } break;
+            // --------------------------- FIXME ---------------------------
+            // to be test
             case Operator::alloc: {
                 int size;
-                if (IS_INT_OPERAND(inst->op1)) {
+                if (inst->op1.type == Type::Int || inst->op1.type == Type::IntLiteral) {
                     size = find_src_operand(inst->op1)._val.ival;
                 }
                 else {
@@ -309,45 +341,44 @@ bool ir::Executor::exec_ir(size_t n) {
             } break;
             case Operator::store: {
                 int off;
-                if (IS_INT_OPERAND(inst->op2)) {
+                if (inst->op2.type == Type::Int || inst->op2.type == Type::IntLiteral) {
+                    off = find_src_operand(inst->op2)._val.ival;
+                }
+                else {
+                    assert(0 && "in Operator::load, op2 should be integer");
+                }
+                if (inst->des.type == Type::Int && inst->op1.type == Type::IntPtr) {
+                    find_src_operand(inst->op1)._val.iptr[off] = find_src_operand(inst->des)._val.ival;
+                }
+                else if (inst->des.type == Type::Float && inst->op1.type == Type::FloatPtr) {
+                    find_src_operand(inst->op1)._val.fptr[off] = find_src_operand(inst->des)._val.fval;
+                }
+                else {
+                    assert(0 && "in Operator::load, op1 should be a pointer and des should be the matched type");
+                }
+            } break;
+            case Operator::load: {
+                int off;
+                if (inst->op2.type == Type::Int || inst->op2.type == Type::IntLiteral) {
                     off = find_src_operand(inst->op2)._val.ival;
                 }
                 else {
                     assert(0 && "in Operator::store, op2 should be integer");
                 }
 
-                if (IS_INT_OPERAND(inst->des) && inst->op1.type == Type::IntPtr) {
-                    find_src_operand(inst->op1)._val.iptr[off] = find_src_operand(inst->des)._val.ival;
+                if (inst->des.type == Type::Int && inst->op1.type == Type::IntPtr) {
+                    get_des_operand(inst->des)->_val.ival = find_src_operand(inst->op1)._val.iptr[off];
                 }
-                else if (IS_FLOAT_OPERAND(inst->des) && inst->op1.type == Type::FloatPtr) {
-                    find_src_operand(inst->op1)._val.fptr[off] = find_src_operand(inst->des)._val.fval;
+                else if (inst->des.type == Type::Float && inst->op1.type == Type::FloatPtr) {
+                    get_des_operand(inst->des)->_val.fval = find_src_operand(inst->op1)._val.fptr[off];
                 }
                 else {
                     assert(0 && "in Operator::store, op1 should be a pointer and des should be the matched type");
                 }
             } break;
-            case Operator::load: {
-                int off;
-                if (IS_INT_OPERAND(inst->op2)) {
-                    off = find_src_operand(inst->op2)._val.ival;
-                }
-                else {
-                    assert(0 && "in Operator::load, op2 should be integer");
-                }
-
-                if (IS_INT_OPERAND(inst->des) && inst->op1.type == Type::IntPtr) {
-                    get_des_operand(inst->des)->_val.ival = find_src_operand(inst->op1)._val.iptr[off];
-                }
-                else if (IS_FLOAT_OPERAND(inst->des) && inst->op1.type == Type::FloatPtr) {
-                    get_des_operand(inst->des)->_val.fval = find_src_operand(inst->op1)._val.fptr[off];
-                }
-                else {
-                    assert(0 && "in Operator::load, op1 should be a pointer and des should be the matched type");
-                }
-            } break;
             case Operator::getptr: {
                 int off;
-                if (IS_INT_OPERAND(inst->op2)) {
+                if (inst->op2.type == Type::Int || inst->op2.type == Type::IntLiteral) {
                     off = find_src_operand(inst->op2)._val.ival;
                 }
                 else {
@@ -364,25 +395,26 @@ bool ir::Executor::exec_ir(size_t n) {
                     assert(0 && "in Operator::getptr, op1 should be a pointer and des should be the matched type");
                 }
             } break;
+            // --------------------------- FIXME ---------------------------
             case Operator::mov: 
             case Operator::def: {
-                assert(IS_INT_OPERAND(inst->des));
+                assert(inst->des.type == Type::Int || inst->des.type == Type::IntLiteral);
                 auto pvalue = get_des_operand(inst->des);
-                if (IS_INT_OPERAND(inst->op1)) {
+                if (inst->op1.type == Type::IntLiteral || inst->op1.type == Type::Int) {
                     *pvalue = find_src_operand(inst->op1);
                 }
                 else {
                     assert(0 && "in Operator::def[mov], op1 has a wrong type");
                 }
 #if (DEBUG_EXEC_DETAIL)
-                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.ival << std::endl;
+                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.ival << " " << pvalue->_val.fval << " end" << std::endl;
 #endif
             } break;
             case Operator::_not: {
                 assert(inst->des.type == Type::Int);
                 auto pvalue = get_des_operand(inst->des);
                 int value = 0;
-                if (IS_INT_OPERAND(inst->op1)) {
+                if (inst->op1.type == Type::IntLiteral || inst->op1.type == Type::Int) {
                     value = find_src_operand(inst->op1)._val.ival;
                 }
                 else {
@@ -390,27 +422,30 @@ bool ir::Executor::exec_ir(size_t n) {
                 }
                 pvalue->_val.ival = (value == 0);
 #if (DEBUG_EXEC_DETAIL)
-                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.ival << std::endl;
+                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.ival << " " << pvalue->_val.fval << " end" << std::endl;
 #endif
             } break;
             case Operator::fdef: 
             case Operator::fmov: {
                 assert(inst->des.type == Type::Float);
                 auto pvalue = get_des_operand(inst->des);
-                if (IS_FLOAT_OPERAND(inst->op1)) {
+                if (inst->op1.type == Type::FloatLiteral || inst->op1.type == Type::Float) {
                     *pvalue = find_src_operand(inst->op1);
                 }
                 else {
                     assert(0 && "in Operator::fdef[fmov], op1 has a wrong type");
                 }
 #if (DEBUG_EXEC_DETAIL)
-                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.ival << std::endl;
+                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.fval << std::endl;
 #endif
             } break;
             case Operator::cvt_i2f: {
                 assert(inst->des.type == Type::Float);
                 auto pvalue = get_des_operand(inst->des);
-                if (IS_INT_OPERAND(inst->op1)) {
+                if (inst->op1.type == Type::IntLiteral || inst->op1.type == Type::Int) {
+                //     pvalue->_val.fval = (float)eval_int(inst->op1.name);
+                // }
+                // else if (inst->op1.type == Type::Int){
                     pvalue->_val.fval = (float)find_src_operand(inst->op1)._val.ival;
                 }
                 else {
@@ -423,14 +458,14 @@ bool ir::Executor::exec_ir(size_t n) {
             case Operator::cvt_f2i: {
                 assert(inst->des.type == Type::Int);
                 auto pvalue = get_des_operand(inst->des);
-                if (IS_FLOAT_OPERAND(inst->op1)) {
+                if (inst->op1.type == Type::FloatLiteral || inst->op1.type == Type::Float) {
                     pvalue->_val.ival = (int)find_src_operand(inst->op1)._val.fval;
                 }
                 else {
                     assert(0 && "in Operator::cvt_f2i, op1 has a wrong type");
                 }
 #if (DEBUG_EXEC_DETAIL)
-                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.ival << std::endl;
+                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.ival << " " << pvalue->_val.fval << " end" << std::endl;
 #endif
             } break;
             // 2 int operand
@@ -451,7 +486,7 @@ bool ir::Executor::exec_ir(size_t n) {
                 assert(inst->des.type == Type::Int);
                 // op1
                 int v1;
-                if (IS_INT_OPERAND(inst->op1)) {
+                if (inst->op1.type == Type::Int || inst->op1.type == Type::IntLiteral) {
                     v1 = find_src_operand(inst->op1)._val.ival;
                 }
                 else {
@@ -459,7 +494,7 @@ bool ir::Executor::exec_ir(size_t n) {
                 }
                 // op2
                 int v2;
-                if (IS_INT_OPERAND(inst->op2)) {
+                if (inst->op2.type == Type::Int || inst->op2.type == Type::IntLiteral) {
                     v2 = find_src_operand(inst->op2)._val.ival;
                 }
                 else {
@@ -510,7 +545,7 @@ bool ir::Executor::exec_ir(size_t n) {
                         assert(0 && "should not reach hear!");
                 }
 #if (DEBUG_EXEC_DETAIL)
-                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.ival << std::endl;
+                    std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.ival << " " << pvalue->_val.fval << " end" << std::endl;
 #endif
             } break;
             case Operator::addi: 
@@ -536,7 +571,7 @@ bool ir::Executor::exec_ir(size_t n) {
                 assert(inst->des.type == Type::Float);
                 // op1
                 float v1;
-                if (IS_FLOAT_OPERAND(inst->op1)) {
+                if (inst->op1.type == Type::Float || inst->op1.type == Type::FloatLiteral) {
                     v1 = find_src_operand(inst->op1)._val.fval;
                 }
                 else {
@@ -544,7 +579,7 @@ bool ir::Executor::exec_ir(size_t n) {
                 }
                 // op2
                 float v2;
-                if (IS_FLOAT_OPERAND(inst->op2)) {
+                if (inst->op2.type == Type::Float || inst->op2.type == Type::FloatLiteral) {
                     v2 = find_src_operand(inst->op2)._val.fval;
                 }
                 else {
@@ -585,6 +620,7 @@ bool ir::Executor::exec_ir(size_t n) {
                     default:
                         assert(0 && "should not reach hear!");
                 }
+                
 #if (DEBUG_EXEC_DETAIL)
                     std::cout << "\tdes operand(" << toString(inst->des.type) << " " << inst->des.name  << "), value = " << pvalue->_val.fval << std::endl;
 #endif
@@ -697,7 +733,7 @@ int getch() {
 
 float getfloat(){
     float n;
-    fscanf(ir::reopen_input_file, "%a", &n);
+    fscanf(ir::reopen_input_file, "%f", &n);
     return n;
 }
 
@@ -712,7 +748,7 @@ int getfarray(float a[]) {
     int n;
     fscanf(ir::reopen_input_file, "%d", &n);
     for (int i = 0; i < n; i++) {
-        fscanf(ir::reopen_input_file, "%a", &a[i]);
+        fscanf(ir::reopen_input_file, "%f", &a[i]);
     }
     return n;
 }
