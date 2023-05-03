@@ -581,7 +581,7 @@ void frontend::Analyzer::AnalyzeFuncFParam(FuncFParam* root) {
             AnalyzeExp(exp);
             assert(exp->is_computable);
             ste.dimension.push_back(std::stoi(exp->v));
-            exppr += 2;
+            exppr += 3;
         }
     }
     ste.operand = Operand(id, is_ptr ? Btypech->t == Type::Int ? Type::IntPtr : Type::FloatPtr : Btypech->t);
