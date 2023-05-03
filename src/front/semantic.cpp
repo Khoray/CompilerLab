@@ -17,7 +17,7 @@ using ir::Operator;
 #define COPY_EXP_NODE(from, to) to->is_computable = from->is_computable; to->v = from->v; to->t = from->t;
 
 // #define log(...) fprintf(stderr, "[%s:%d,function:%s]:", __FILE__, __LINE__, __FUNCTION__); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n")
-#define log(...) 42
+#define log(...)
 
 
 map<std::string,ir::Function*>* frontend::get_lib_funcs() {
@@ -226,7 +226,7 @@ void frontend::Analyzer::insert_inst(Instruction* inst) {
 
 void frontend::Analyzer::AnalyzeCompUnit(CompUnit* root) {
     log("fuck");
-    for(int i = 0; i < root->children.size(); i++) {
+    for(int i = 0; i < (int) root->children.size(); i++) {
         AstNode* chroot = root->children[i];
         if(chroot->type == NodeType::DECL) {
             AnalyzeDecl((Decl*) chroot);
@@ -241,7 +241,7 @@ void frontend::Analyzer::AnalyzeCompUnit(CompUnit* root) {
 
 void frontend::Analyzer::AnalyzeDecl(Decl* root) {
     log("decl");
-    for(int i = 0; i < root->children.size(); i++) {
+    for(int i = 0; i < (int) root->children.size(); i++) {
         AstNode* chroot = root->children[i];
         if(chroot->type == NodeType::CONSTDECL) {
             AnalyzeConstDecl((ConstDecl*) chroot);
@@ -255,7 +255,7 @@ void frontend::Analyzer::AnalyzeConstDecl(ConstDecl* root) {
     log("ConstDef");
     AnalyzeBType(((BType*) root->children[1]));
     root->t = ((BType*) root->children[1])->t;
-    for(int i = 2; i < root->children.size(); i += 2) {
+    for(int i = 2; i < (int) root->children.size(); i += 2) {
         AstNode* chroot = root->children[i];
         ((ConstDef*) chroot)->t = ((BType*) root->children[1])->t;
         AnalyzeConstDef((ConstDef*) chroot);
@@ -319,7 +319,7 @@ void frontend::Analyzer::AnalyzeConstInitVal(int &index, STE& ste, int res, int 
         // ConstInitVal -> { ConstInitVal* }
         int init_index = index;
         int ptr = 1;
-        while(ptr < root->children.size() && root->children[ptr]->type == NodeType::CONSTINITVAL) {
+        while(ptr < (int) root->children.size() && root->children[ptr]->type == NodeType::CONSTINITVAL) {
             AnalyzeConstInitVal(index, ste, res / ste.dimension[level], level + 1, (ConstInitVal*) root->children[ptr]);
             ptr += 2;
         }
@@ -364,7 +364,7 @@ void frontend::Analyzer::AnalyzeVarDecl(VarDecl* root) {
     AnalyzeBType(bc);
     log("%d", bc->t);
     root->t = bc->t;
-    for(int i = 1; i < root->children.size(); i += 2) {
+    for(int i = 1; i < (int) root->children.size(); i += 2) {
         VarDef* chroot = (VarDef*) root->children[i];
         chroot->t = bc->t;
         AnalyzeVarDef(chroot);
@@ -379,7 +379,7 @@ void frontend::Analyzer::AnalyzeVarDef(VarDef* root) {
     int constExp_ptr = 2;
     std::vector<int> dimension;
     int len = 1;
-    while(constExp_ptr < root->children.size() && root->children[constExp_ptr]->type == NodeType::CONSTEXP) {
+    while(constExp_ptr < (int) root->children.size() && root->children[constExp_ptr]->type == NodeType::CONSTEXP) {
         AnalyzeConstExp((ConstExp*) root->children[constExp_ptr]);
         dimension.push_back(std::stoi(((ConstExp*) root->children[constExp_ptr])->v));
         constExp_ptr += 3;
@@ -407,7 +407,7 @@ void frontend::Analyzer::AnalyzeVarDef(VarDef* root) {
 
     // init val
     vector<int> dim;
-    if(constExp_ptr < root->children.size()) {
+    if(constExp_ptr < (int) root->children.size()) {
         int index = 0;
         AnalyzeInitVal(index, ste, len, 0, (InitVal*) root->children[constExp_ptr]);
     } else if(current_func == nullptr) {
@@ -440,7 +440,7 @@ void frontend::Analyzer::AnalyzeInitVal(int& index, STE& ste, int res, int level
     if(root->children[0]->type == NodeType::TERMINAL) {
         int ptr = 1;
         int init_index = index;
-        while(ptr < root->children.size() && root->children[ptr]->type == NodeType::INITVAL) {
+        while(ptr < (int) root->children.size() && root->children[ptr]->type == NodeType::INITVAL) {
             AnalyzeInitVal(index, ste, res / ste.dimension[level], level + 1, (InitVal*) root->children[ptr]);
             ptr += 2;
         }
@@ -576,7 +576,7 @@ void frontend::Analyzer::AnalyzeFuncFParam(FuncFParam* root) {
         is_ptr = true;
         ste.dimension.push_back(0);
         int exppr = 5;
-        while(exppr < root->children.size() && root->children[exppr]->type == NodeType::EXP) {
+        while(exppr < (int) root->children.size() && root->children[exppr]->type == NodeType::EXP) {
             Exp* exp = (Exp*) root->children[exppr];
             AnalyzeExp(exp);
             assert(exp->is_computable);
@@ -590,7 +590,7 @@ void frontend::Analyzer::AnalyzeFuncFParam(FuncFParam* root) {
 }
 
 void frontend::Analyzer::AnalyzeFuncFParams(FuncFParams* root) {
-    for(int i = 0; i < root->children.size(); i += 2) {
+    for(int i = 0; i < (int) root->children.size(); i += 2) {
         FuncFParam* ch = (FuncFParam*) root->children[i];
         AnalyzeFuncFParam(ch);
     }
@@ -598,7 +598,7 @@ void frontend::Analyzer::AnalyzeFuncFParams(FuncFParams* root) {
 
 void frontend::Analyzer::AnalyzeBlock(Block* root) {
     log("Block");
-    for(int i = 1; i < root->children.size() - 1; i++) {
+    for(int i = 1; i < (int) root->children.size() - 1; i++) {
         AnalyzeBlockItem((BlockItem*) root->children[i]);
     }
 }
@@ -803,7 +803,7 @@ void frontend::Analyzer::AnalyzeLVal(LVal* root, int needload) {
         current_func->addInst(assignIndex);
 
         std::string tmp = get_tmp_var();
-        for(int i = 2; i < root->children.size(); i += 3) {
+        for(int i = 2; i < (int) root->children.size(); i += 3) {
             Exp* exp = (Exp*) root->children[i];
             AnalyzeExp(exp);
 
@@ -813,7 +813,7 @@ void frontend::Analyzer::AnalyzeLVal(LVal* root, int needload) {
             Instruction *addInst = new Instruction(Operand(index, Type::Int), Operand(tmp, Type::Int), Operand(index, Type::Int), Operator::add);
             current_func->addInst(addInst);
 
-            if(i + 3 < root->children.size()) {
+            if(i + 3 < (int) root->children.size()) {
                 Instruction *movInst2 = new Instruction(Operand(std::to_string(ste.dimension[(i + 1) / 3]), Type::IntLiteral), Operand(), Operand(tmp, Type::Int), Operator::mov);
                 current_func->addInst(movInst2);
 
@@ -1000,7 +1000,7 @@ void frontend::Analyzer::AnalyzeUnaryExp(UnaryExp* root) {
             FuncRParams* funcRParams = (FuncRParams*) root->children[2];
             AnalyzeFuncRParams(paras, funcRParams);
 
-            for(int i = 0; i < paras.size(); i++) {
+            for(int i = 0; i < (int) paras.size(); i++) {
                 Operand sc = func->ParameterList[i];
                 Operand xc = paras[i];
 
@@ -1027,7 +1027,7 @@ void frontend::Analyzer::AnalyzeUnaryOp(UnaryOp* root) {
 
 void frontend::Analyzer::AnalyzeFuncRParams(std::vector<Operand> &paras, FuncRParams* root) {
     int exppr = 0;
-    while(exppr < root->children.size() && root->children[exppr]->type == NodeType::EXP) {
+    while(exppr < (int) root->children.size() && root->children[exppr]->type == NodeType::EXP) {
         Exp* exp = (Exp*) root->children[exppr];
         AnalyzeExp(exp);
         if(exp->t == Type::FloatPtr || exp->t == Type::IntPtr) {
@@ -1057,7 +1057,7 @@ void frontend::Analyzer::AnalyzeMulExp(MulExp* root) {
     // root->v = get_tmp_var(); 先不赋值
     store_tmp();
     int is_int = 1;
-    for(int i = 0; i < root->children.size(); i += 2) {
+    for(int i = 0; i < (int) root->children.size(); i += 2) {
         UnaryExp* unaryexp = (UnaryExp*) root->children[i];
         AnalyzeUnaryExp(unaryexp);
         root->is_computable &= unaryexp->is_computable;
@@ -1066,7 +1066,7 @@ void frontend::Analyzer::AnalyzeMulExp(MulExp* root) {
     if(root->is_computable) {
         if(is_int) {
             int temp = std::stoi(((UnaryExp*) root->children[0])->v);
-            for(int i = 2; i < root->children.size(); i += 2) {
+            for(int i = 2; i < (int) root->children.size(); i += 2) {
                 UnaryExp* unaryexp = (UnaryExp*) root->children[i];
                 Term* sign = (Term*) root->children[i - 1];
                 int nowval = std::stoi(unaryexp->v);
@@ -1082,7 +1082,7 @@ void frontend::Analyzer::AnalyzeMulExp(MulExp* root) {
             root->t = Type::IntLiteral;
         } else {
             float temp = std::stof(((UnaryExp*) root->children[0])->v);
-            for(int i = 2; i < root->children.size(); i += 2) {
+            for(int i = 2; i < (int) root->children.size(); i += 2) {
                 UnaryExp* unaryexp = (UnaryExp*) root->children[i];
                 Term* sign = (Term*) root->children[i - 1];
                 float nowval = std::stof(unaryexp->v);
@@ -1105,7 +1105,7 @@ void frontend::Analyzer::AnalyzeMulExp(MulExp* root) {
             Instruction* movinst = new Instruction(Operand(initu->v, initu->t), Operand(), Operand(root->v, root->t), Operator::mov);
             insert_inst(movinst);
 
-            for(int i = 2; i < root->children.size(); i += 2) {
+            for(int i = 2; i < (int) root->children.size(); i += 2) {
                 UnaryExp* unaryexp = (UnaryExp*) root->children[i];
                 Term* sign = (Term*) root->children[i - 1];
                 std::string uid;
@@ -1127,7 +1127,7 @@ void frontend::Analyzer::AnalyzeMulExp(MulExp* root) {
             root->v = tmp_float;
             root->t = Type::Float;
 
-            for(int i = 0; i < root->children.size(); i += 2) {
+            for(int i = 0; i < (int) root->children.size(); i += 2) {
                 UnaryExp* unaryexp = (UnaryExp*) root->children[i];
                 Term* sign = (Term*) root->children[i - 1];
                 std::string uid;
@@ -1168,7 +1168,7 @@ void frontend::Analyzer::AnalyzeAddExp(AddExp* root) {
     // root->v = get_tmp_var(); 先不赋值
     store_tmp();
     int is_int = 1;
-    for(int i = 0; i < root->children.size(); i += 2) {
+    for(int i = 0; i < (int) root->children.size(); i += 2) {
         MulExp* mulexp = (MulExp*) root->children[i];
         AnalyzeMulExp(mulexp);
         root->is_computable &= mulexp->is_computable;
@@ -1177,7 +1177,7 @@ void frontend::Analyzer::AnalyzeAddExp(AddExp* root) {
     if(root->is_computable) {
         if(is_int) {
             int temp = std::stoi(((MulExp*) root->children[0])->v);
-            for(int i = 2; i < root->children.size(); i += 2) {
+            for(int i = 2; i < (int) root->children.size(); i += 2) {
                 MulExp* mulexp = (MulExp*) root->children[i];
                 Term* sign = (Term*) root->children[i - 1];
                 int nowval = std::stoi(mulexp->v);
@@ -1191,7 +1191,7 @@ void frontend::Analyzer::AnalyzeAddExp(AddExp* root) {
             root->t = Type::IntLiteral;
         } else {
             float temp = std::stof(((MulExp*) root->children[0])->v);
-            for(int i = 2; i < root->children.size(); i += 2) {
+            for(int i = 2; i < (int) root->children.size(); i += 2) {
                 MulExp* mulexp = (MulExp*) root->children[i];
                 Term* sign = (Term*) root->children[i - 1];
                 float nowval = std::stof(mulexp->v);
@@ -1212,7 +1212,7 @@ void frontend::Analyzer::AnalyzeAddExp(AddExp* root) {
             Instruction* movinst = new Instruction(Operand(initu->v, initu->t), Operand(), Operand(root->v, root->t), Operator::mov);
             insert_inst(movinst);
 
-            for(int i = 2; i < root->children.size(); i += 2) {
+            for(int i = 2; i < (int) root->children.size(); i += 2) {
                 MulExp* mulexp = (MulExp*) root->children[i];
                 Term* sign = (Term*) root->children[i - 1];
                 std::string uid;
@@ -1232,7 +1232,7 @@ void frontend::Analyzer::AnalyzeAddExp(AddExp* root) {
             root->v = tmp_float;
             root->t = Type::Float;
 
-            for(int i = 0; i < root->children.size(); i += 2) {
+            for(int i = 0; i < (int) root->children.size(); i += 2) {
                 MulExp* mulexp = (MulExp*) root->children[i];
                 Term* sign = (Term*) root->children[i - 1];
                 std::string uid;
@@ -1273,7 +1273,7 @@ void frontend::Analyzer::AnalyzeRelExp(RelExp* root) {
     // root->v = get_tmp_var(); 先不赋值
     store_tmp();
     int is_int = 1;
-    for(int i = 0; i < root->children.size(); i += 2) {
+    for(int i = 0; i < (int) root->children.size(); i += 2) {
         AddExp* addexp = (AddExp*) root->children[i];
         AnalyzeAddExp(addexp);
         root->is_computable &= addexp->is_computable;
@@ -1282,7 +1282,7 @@ void frontend::Analyzer::AnalyzeRelExp(RelExp* root) {
     if(root->is_computable) {
         if(is_int) {
             int temp = std::stoi(((AddExp*) root->children[0])->v);
-            for(int i = 2; i < root->children.size(); i += 2) {
+            for(int i = 2; i < (int) root->children.size(); i += 2) {
                 AddExp* addexp = (AddExp*) root->children[i];
                 Term* sign = (Term*) root->children[i - 1];
                 int nowval = std::stoi(addexp->v);
@@ -1300,7 +1300,7 @@ void frontend::Analyzer::AnalyzeRelExp(RelExp* root) {
             root->t = Type::IntLiteral;
         } else {
             float temp = std::stof(((AddExp*) root->children[0])->v);
-            for(int i = 2; i < root->children.size(); i += 2) {
+            for(int i = 2; i < (int) root->children.size(); i += 2) {
                 AddExp* addexp = (AddExp*) root->children[i];
                 Term* sign = (Term*) root->children[i - 1];
                 float nowval = std::stof(addexp->v);
@@ -1325,7 +1325,7 @@ void frontend::Analyzer::AnalyzeRelExp(RelExp* root) {
             Instruction* movinst = new Instruction(Operand(initu->v, initu->t), Operand(), Operand(root->v, root->t), Operator::mov);
             insert_inst(movinst);
 
-            for(int i = 2; i < root->children.size(); i += 2) {
+            for(int i = 2; i < (int) root->children.size(); i += 2) {
                 AddExp* addexp = (AddExp*) root->children[i];
                 Term* sign = (Term*) root->children[i - 1];
                 std::string uid;
@@ -1349,7 +1349,7 @@ void frontend::Analyzer::AnalyzeRelExp(RelExp* root) {
             root->v = tmp_float;
             root->t = Type::Float;
 
-            for(int i = 0; i < root->children.size(); i += 2) {
+            for(int i = 0; i < (int) root->children.size(); i += 2) {
                 AddExp* addexp = (AddExp*) root->children[i];
                 Term* sign = (Term*) root->children[i - 1];
                 std::string uid;
@@ -1394,7 +1394,7 @@ void frontend::Analyzer::AnalyzeEqExp(EqExp* root) {
     // root->v = get_tmp_var(); 先不赋值
     store_tmp();
     int is_int = 1;
-    for(int i = 0; i < root->children.size(); i += 2) {
+    for(int i = 0; i < (int) root->children.size(); i += 2) {
         RelExp* relexp = (RelExp*) root->children[i];
         AnalyzeRelExp(relexp);
         root->is_computable &= relexp->is_computable;
@@ -1403,7 +1403,7 @@ void frontend::Analyzer::AnalyzeEqExp(EqExp* root) {
     if(root->is_computable) {
         if(is_int) {
             int temp = std::stoi(((RelExp*) root->children[0])->v);
-            for(int i = 2; i < root->children.size(); i += 2) {
+            for(int i = 2; i < (int) root->children.size(); i += 2) {
                 RelExp* relexp = (RelExp*) root->children[i];
                 Term* sign = (Term*) root->children[i - 1];
                 int nowval = std::stoi(relexp->v);
@@ -1417,7 +1417,7 @@ void frontend::Analyzer::AnalyzeEqExp(EqExp* root) {
             root->t = Type::IntLiteral;
         } else {
             float temp = std::stof(((RelExp*) root->children[0])->v);
-            for(int i = 2; i < root->children.size(); i += 2) {
+            for(int i = 2; i < (int) root->children.size(); i += 2) {
                 RelExp* relexp = (RelExp*) root->children[i];
                 Term* sign = (Term*) root->children[i - 1];
                 float nowval = std::stof(relexp->v);
@@ -1438,7 +1438,7 @@ void frontend::Analyzer::AnalyzeEqExp(EqExp* root) {
             Instruction* movinst = new Instruction(Operand(initu->v, initu->t), Operand(), Operand(root->v, root->t), Operator::mov);
             insert_inst(movinst);
 
-            for(int i = 2; i < root->children.size(); i += 2) {
+            for(int i = 2; i < (int) root->children.size(); i += 2) {
                 RelExp* relexp = (RelExp*) root->children[i];
                 Term* sign = (Term*) root->children[i - 1];
                 std::string uid;
@@ -1458,7 +1458,7 @@ void frontend::Analyzer::AnalyzeEqExp(EqExp* root) {
             root->v = tmp_float;
             root->t = Type::Float;
 
-            for(int i = 0; i < root->children.size(); i += 2) {
+            for(int i = 0; i < (int) root->children.size(); i += 2) {
                 RelExp* relexp = (RelExp*) root->children[i];
                 Term* sign = (Term*) root->children[i - 1];
                 std::string uid;

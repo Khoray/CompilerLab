@@ -18,3 +18,9 @@ test/__pycache__/*
 
 # my tests
 test.*
+
+# todo
+todo.txt
+
+# lab release
+lab*.zip
