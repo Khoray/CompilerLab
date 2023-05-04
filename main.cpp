@@ -76,8 +76,8 @@ int main(int argc, char** argv) {
         ir::reopen_input_file =  fopen(input_file_name.c_str(), "r");
 
         auto executor = ir::Executor(&program);
-        std::cout << program.draw();
-        fprintf(ir::reopen_output_file, "\n%d", executor.run());
+        std::cout << program.draw() << "--------------------------- Executor::run() ---------------------------" << std::endl;
+        fprintf(ir::reopen_output_file, "\n%d", (uint8_t)executor.run());
     }
     return 0;
 }
