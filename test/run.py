@@ -14,6 +14,8 @@ def run_compiler(arg1):
     elif step == "-s2":
         step = "-e"
         oftype = "out"
+    elif step == "-S":
+        oftype = "s"
     else:
         print("illegal input")
         exit()
