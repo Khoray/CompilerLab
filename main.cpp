@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
         std::cout << program.draw();
         clock_t start_time = clock();
         fprintf(ir::reopen_output_file, "\n%d", (uint8_t) executor.run());
-        std::cerr << "run time: " << clock() - start_time << "ms\n"; 
+        std::cerr << "run time: " << (clock() - start_time) / 1000.0 << "ms\n"; 
     }
     return 0;
 }
