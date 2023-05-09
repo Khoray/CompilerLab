@@ -32,6 +32,8 @@ link_directories(./lib)
 
 aux_source_directory(./src/front FRONT_SRC)
 add_library(Front ${FRONT_SRC})
+aux_source_directory(./src/backend BACKEND_SRC)
+add_library(Backend ${BACKEND_SRC})
 
 # 为了 debug 方便，你可以选择通过源文件来构建 IR 测评机，但是请以链接静态库文件的方式去跑分（为了防止你们修改测评机，在OJ上我们会采取此方式）
 # --------------------- from src ---------------------
@@ -47,4 +49,4 @@ add_executable(compiler main.cpp)
 
 # link
 # every lib should be linked with [compiler]
-target_link_libraries(compiler Tools Front IR jsoncpp)
+target_link_libraries(compiler Backend Tools Front IR jsoncpp)

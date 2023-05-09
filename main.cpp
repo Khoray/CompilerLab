@@ -3,6 +3,7 @@
 #include"front/semantic.h"
 #include"ir/ir.h"
 #include"tools/ir_executor.h"
+#include"backend/generator.h"
 
 #include<string>
 #include<vector>
@@ -93,6 +94,12 @@ int main(int argc, char** argv) {
         clock_t start_time = clock();
         fprintf(ir::reopen_output_file, "\n%d", (uint8_t) executor.run());
         std::cerr << "run time: " << (clock() - start_time) / 1000.0 << "ms\n"; 
+    }
+
+    // compiler <src_filename> -e -o <output_filename>
+    if(step == "-S") {
+        backend::Generator generator(program, output_file);
+        generator.gen();
     }
     return 0;
 }
