@@ -22,7 +22,6 @@ struct Operand {
     std::string name;
     Type type;
     Operand(std::string = "null", Type = Type::null);
-    bool operator < (const Operand& o) const;
 };
 
 }

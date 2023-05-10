@@ -174,6 +174,9 @@ string rv::rv_inst::draw() const {
 // stackVarMap
 backend::stackVarMap::stackVarMap(): offset(-20) {}
 
+int backend::stackVarMap::add_operand(Operand op, uint32_t size) { TODO; }
+int backend::stackVarMap::find_operand(Operand op) { TODO; }
+
 // reg allocator
 backend::regAllocator::regAllocator(std::vector<rv::rv_inst*> &rv_insts_out): reg2op_map(32), freg2fop_map(32), reg_timestamp(32), freg_timestamp(32), rv_insts(rv_insts_out) {}
 
@@ -220,8 +223,8 @@ void backend::regAllocator::spill(rvFREG r) {
 
     rv_inst* store_inst = new rv_inst();
     store_inst->op = rvOPCODE::FSW;
-    store_inst->frs1 = rvREG::X8;
-    store_inst->rs2 = r;
+    store_inst->rs1 = rvREG::X8;
+    store_inst->frs2 = r;
     store_inst->imm = pos;
     // fsw r, pos(s0)
     rv_insts.push_back(store_inst);
@@ -231,8 +234,71 @@ void backend::regAllocator::spill(rvFREG r) {
     freg2fop_map[(int) r] = Operand();
 }
 
+void backend::regAllocator::load(rvREG r, ir::Operand op, int time) {
+    assert(available_regs.count(r));
+    available_regs.erase(r);
+    reg_using.emplace(reg_timestamp[(int) r], r);
+    update(r, time);
 
-backend::Generator::Generator(ir::Program& p, std::ofstream& f): program(p), fout(f), reg_allocator(rv_insts) {}
+    // find op in op2reg
+    if(op2reg_map.count(op)) {
+        rv_inst* mv = new rv_inst();
+        mv->op = rvOPCODE::MOV;
+        mv->rs1 = op2reg_map[op];
+        mv->rd = r;
+        rv_insts.push_back(mv);
+
+        available_regs.insert(mv->rs1);
+        op2reg_map[op] = r;
+        reg2op_map[(int) mv->rs1] = Operand();
+        reg2op_map[(int) r] = op;
+    } else {
+        int pos = stack_var_map.find_operand(op);
+        op2reg_map[op] = r;
+        reg2op_map[(int) r] = op;
+
+        rv_inst* load = new rv_inst();
+        load->op = rvOPCODE::LW;
+        load->rs1 = rvREG::X8;
+        load->imm = pos;
+        load->rd = r;
+        rv_insts.push_back(load);
+    }
+}
+
+void backend::regAllocator::load(rvFREG r, ir::Operand op, int time) {
+    assert(available_fregs.count(r));
+    available_fregs.erase(r);
+    freg_using.emplace(freg_timestamp[(int) r], r);
+    update(r, time);
+
+    // find op in op2reg
+    if(fop2freg_map.count(op)) {
+        rv_inst* mv = new rv_inst();
+        mv->op = rvOPCODE::FMOV;
+        mv->frs1 = fop2freg_map[op];
+        mv->frd = r;
+        rv_insts.push_back(mv);
+
+        available_fregs.insert(mv->frs1);
+        fop2freg_map[op] = r;
+        freg2fop_map[(int) mv->frs1] = Operand();
+        freg2fop_map[(int) r] = op;
+    } else {
+        int pos = stack_var_map.find_operand(op);
+        fop2freg_map[op] = r;
+        freg2fop_map[(int) r] = op;
+
+        rv_inst* load = new rv_inst();
+        load->op = rvOPCODE::FLW;
+        load->rs1 = rvREG::X8;
+        load->imm = pos;
+        load->frd = r;
+        rv_insts.push_back(load);
+    }
+}
+
+backend::Generator::Generator(ir::Program& p, std::ofstream& f): program(p), fout(f) {}
 
 void backend::Generator::gen() {
     TODO;

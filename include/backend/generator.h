@@ -37,10 +37,16 @@ struct stackVarMap {
     int add_operand(ir::Operand, uint32_t size = 4);
 };
 
+struct operandCmp {
+    bool operator() (const ir::Operand& a, const ir::Operand& b) const {
+        return a.name < b.name;
+    }
+};
+
 struct regAllocator {
     std::vector<rv::rv_inst*> &rv_insts;
-    std::map<ir::Operand, rvREG> op2reg_map;
-    std::map<ir::Operand, rvFREG> fop2freg_map;
+    std::map<ir::Operand, rvREG, operandCmp> op2reg_map;
+    std::map<ir::Operand, rvFREG, operandCmp> fop2freg_map;
     std::vector<ir::Operand> reg2op_map;
     std::vector<ir::Operand> freg2fop_map;
 
@@ -73,11 +79,6 @@ struct Generator {
     std::ofstream& fout;                 // output file
 
     Generator(ir::Program&, std::ofstream&);
-
-    std::vector<rv::rv_inst*> rv_insts;
-
-    // reg allocate api
-    regAllocator reg_allocator;
 
     // generate wrapper function
     void gen();

@@ -94,7 +94,7 @@ enum class rvOPCODE {
     // RV32F / D Floating-Point Extensions
 
     // Pseudo Instructions
-    LA, LI, MOV, J,                                         // ...
+    LA, LI, MOV, FMOV, J,                                         // ...
 };
 std::string toString(rvOPCODE r);  // implement this in ur own way
 
