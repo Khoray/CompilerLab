@@ -5,16 +5,23 @@
 #include "backend/rv_def.h"
 #include "backend/rv_inst_impl.h"
 
+
+#include<set>
+#include<queue>
+#include<utility>
 #include<map>
 #include<string>
 #include<vector>
 #include<fstream>
-
+using namespace rv;
 namespace backend {
 
-// it is a map bewteen variable and its mem addr, the mem addr of a local variable can be identified by ($sp + off)
+// it is a map bewteen variable and its mem addr, the mem addr of a local variable can be identified by ($s0 + off)
 struct stackVarMap {
     std::map<ir::Operand, int> _table;
+    int offset; // offset to s0
+
+    stackVarMap();
 
     /**
      * @brief find the addr of a ir::Operand
@@ -30,6 +37,36 @@ struct stackVarMap {
     int add_operand(ir::Operand, uint32_t size = 4);
 };
 
+struct regAllocator {
+    std::vector<rv::rv_inst*> &rv_insts;
+    std::map<ir::Operand, rvREG> op2reg_map;
+    std::map<ir::Operand, rvFREG> fop2freg_map;
+    std::vector<ir::Operand> reg2op_map;
+    std::vector<ir::Operand> freg2fop_map;
+
+    std::set<rvREG> available_regs;
+    std::set<rvFREG> available_fregs;
+    // LRU Cache
+    std::set<std::pair<int, rvREG>> reg_using;
+    std::set<std::pair<int, rvFREG>> freg_using;
+    std::vector<int> reg_timestamp;
+    std::vector<int> freg_timestamp;
+
+    stackVarMap stack_var_map;
+    regAllocator(std::vector<rv::rv_inst*> &rv_insts);
+
+    void update(rvREG r, int time);
+    void update(rvFREG r, int time);
+
+    void spill(rvREG r);
+    void spill(rvFREG r);
+    void load(rvREG r, ir::Operand op, int time);
+    void load(rvFREG r, ir::Operand op, int time);
+
+    rv::rvREG getReg(ir::Operand, int time);
+    rv::rvFREG fgetReg(ir::Operand, int time);
+};
+
 
 struct Generator {
     const ir::Program& program;         // the program to gen
@@ -37,13 +74,10 @@ struct Generator {
 
     Generator(ir::Program&, std::ofstream&);
 
+    std::vector<rv::rv_inst*> rv_insts;
+
     // reg allocate api
-    rv::rvREG getRd(ir::Operand);
-    rv::rvFREG fgetRd(ir::Operand);
-    rv::rvREG getRs1(ir::Operand);
-    rv::rvREG getRs2(ir::Operand);
-    rv::rvFREG fgetRs1(ir::Operand);
-    rv::rvFREG fgetRs2(ir::Operand);
+    regAllocator reg_allocator;
 
     // generate wrapper function
     void gen();

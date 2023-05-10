@@ -85,7 +85,7 @@ enum class rvOPCODE {
     // RV32I Base Integer Instructions
     ADD, SUB, XOR, OR, AND, SLL, SRL, SRA, SLT, SLTU,       // arithmetic & logic
     ADDI, XORI, ORI, ANDI, SLLI, SRLI, SRAI, SLTI, SLTIU,   // immediate
-    LW, SW,                                                 // load & store
+    FLW, FSW, LW, SW,                                                 // load & store
     BEQ, BNE, BLT, BGE, BLTU, BGEU,                         // conditional branch
     JAL, JALR,                                              // jump
 
