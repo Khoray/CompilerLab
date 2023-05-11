@@ -245,7 +245,7 @@ void frontend::Analyzer::insert_inst(Instruction* inst) {
 void frontend::Analyzer::addRelInst(Operand op1, Operand op2, Operand des, TokenType op) {
     assert(des.type == Type::Int);
     store_tmp();
-    Operand tempvar = get_tmp_var();
+    Operand tempvar = Operand(get_tmp_var(), Type::Int);
     insert_inst(new Instruction(op1, op2, tempvar, Operator::sub));
     switch(op) {
         case TokenType::EQL: {
@@ -272,6 +272,42 @@ void frontend::Analyzer::addRelInst(Operand op1, Operand op2, Operand des, Token
         case TokenType::GEQ: {
             insert_inst(new Instruction(tempvar, Operand("0", Type::IntLiteral), des, Operator::lss));
             insert_inst(new Instruction(des, Operand("0", Type::IntLiteral), des, Operator::eq));
+        } break;
+        
+        default:
+            TODO;
+            break;
+        }
+        
+    restore_tmp();
+}
+
+void frontend::Analyzer::addFRelInst(Operand op1, Operand op2, Operand des, TokenType op) {
+    assert(des.type == Type::Float);
+    store_tmp();
+    switch(op) {
+        case TokenType::EQL: {
+            insert_inst(new Instruction(op1, op2, des, Operator::feq));
+        } break;
+
+        case TokenType::NEQ: {
+            insert_inst(new Instruction(op1, op2, des, Operator::fneq));
+        } break;
+
+        case TokenType::LSS: {
+            insert_inst(new Instruction(op1, op2, des, Operator::flss));
+        } break;
+
+        case TokenType::GTR: {
+            insert_inst(new Instruction(op2, op1, des, Operator::flss));
+        } break;
+
+        case TokenType::LEQ: {
+            insert_inst(new Instruction(op1, op2, des, Operator::fleq));
+        } break;
+
+        case TokenType::GEQ: {
+            insert_inst(new Instruction(op2, op1, des, Operator::fleq));
         } break;
         
         default:
@@ -1443,15 +1479,16 @@ void frontend::Analyzer::AnalyzeRelExp(RelExp* root) {
                     tmp_f_stack.back() = tmp_f_cnt; // TODO
                     continue;
                 }
-                if(sign->token.type == TokenType::LSS) {
-                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::flss));
-                } else if(sign->token.type == TokenType::GTR) {
-                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::fgtr));
-                } else if(sign->token.type == TokenType::LEQ) {
-                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::fleq));
-                } else if(sign->token.type == TokenType::GEQ) {
-                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::fgeq));
-                }
+                // if(sign->token.type == TokenType::LSS) {
+                //     current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::flss));
+                // } else if(sign->token.type == TokenType::GTR) {
+                //     current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::fgtr));
+                // } else if(sign->token.type == TokenType::LEQ) {
+                //     current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::fleq));
+                // } else if(sign->token.type == TokenType::GEQ) {
+                //     current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::fgeq));
+                // }
+                addFRelInst(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), sign->token.type);
             }
         }
     }
@@ -1553,11 +1590,12 @@ void frontend::Analyzer::AnalyzeEqExp(EqExp* root) {
                     tmp_f_stack.back() = tmp_f_cnt; // TODO
                     continue;
                 }
-                if(sign->token.type == TokenType::EQL) {
-                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::feq));
-                } else if(sign->token.type == TokenType::NEQ) {
-                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::fneq));
-                }
+                // if(sign->token.type == TokenType::EQL) {
+                //     current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::feq));
+                // } else if(sign->token.type == TokenType::NEQ) {
+                //     current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), Operator::fneq));
+                // }
+                addFRelInst(Operand(root->v, root->t), Operand(uid, Type::Float), Operand(root->v, root->t), sign->token.type);
             }
         }
     }
@@ -1602,9 +1640,10 @@ void frontend::Analyzer::AnalyzeLAndExp(LAndExp* root) {
         } else {
             store_tmp();
             goto_checker = Operand(get_tmp_f_var(), Type::Float);
+            Operand op2 = convert_type(Operand("0", Type::FloatLiteral), Type::Float);
             insert_inst(new Instruction(
                 Operand(eqexp->v, eqexp->t),
-                Operand("0", Type::FloatLiteral),
+                op2,
                 goto_checker,
                 Operator::feq
             ));

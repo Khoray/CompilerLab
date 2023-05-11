@@ -77,6 +77,14 @@ string rv::toString(rvOPCODE op) {
         return "slti";
     case rvOPCODE::SLTIU:
         return "sltiu";
+    case rvOPCODE::SEQZ:
+        return "seqz";
+    case rvOPCODE::SNEZ:
+        return "snez";
+    case rvOPCODE::SLTZ:
+        return "sltz";
+    case rvOPCODE::SGTZ:
+        return "sgtz";
     case rvOPCODE::LW:
         return "lw";
     case rvOPCODE::SW:
@@ -93,6 +101,8 @@ string rv::toString(rvOPCODE op) {
         return "bltu";
     case rvOPCODE::BGEU:
         return "bgeu";
+    case rvOPCODE::BNEZ:
+        return "bnez";
     case rvOPCODE::JAL:
         return "jal";
     case rvOPCODE::JALR:
@@ -105,6 +115,10 @@ string rv::toString(rvOPCODE op) {
         return "mov";
     case rvOPCODE::J:
         return "j";
+    default:
+        std::cerr << (int) op << "\n";
+        assert(0 && "gg");
+        break;
     }
 }
 
@@ -136,6 +150,12 @@ string rv::rv_inst::draw() const {
     case rvOPCODE::SLTIU:
         ret += toString(rd) + ", " + toString(rs1) + ", " + std::to_string((int) imm);
         break;
+    case rvOPCODE::SEQZ:
+    case rvOPCODE::SNEZ:
+    case rvOPCODE::SLTZ:
+    case rvOPCODE::SGTZ:
+        ret += toString(rd) + ", " + toString(rs1);
+        break;
     case rvOPCODE::LW:
         ret += toString(rd) + ", " + std::to_string((int) imm) + "(" + toString(rs1) + ")";
         break;
@@ -149,6 +169,9 @@ string rv::rv_inst::draw() const {
     case rvOPCODE::BLTU:
     case rvOPCODE::BGEU:
         ret += toString(rs1) + ", " + toString(rs2) + ", " + label;
+        break;
+    case rvOPCODE::BNEZ:
+        ret += toString(rs1) + ", " + label;
         break;
     case rvOPCODE::JAL:
         assert("no jal");
@@ -168,12 +191,16 @@ string rv::rv_inst::draw() const {
     case rvOPCODE::J:
         ret += label;
         break;
+    default:
+        std::cerr << (int) op << "\n";
+        assert(0 && "gg");
+        break;
     }
 
     return ret;
 }
 
-rv::rv_inst::rv_inst() {}
+rv::rv_inst::rv_inst(): is_label(false) {}
 rv::rv_inst::rv_inst(string label_name): is_label(true), label(label_name) {}
 
 
@@ -395,6 +422,12 @@ rvFREG backend::regAllocator::fgetReg(Operand op, int time) {
 // gen
 backend::Generator::Generator(ir::Program& p, std::ofstream& f): program(p), fout(f) {}
 
+int backend::Generator::get_label_id(int line_num) {
+    auto it = std::lower_bound(goto_label_lines->begin(), goto_label_lines->end(), line_num);
+    if(it == goto_label_lines->end() || *it != line_num) return -1;
+    return (int) (it - goto_label_lines->begin());
+}
+
 void backend::Generator::gen() {
     // do global things
     fout << "\t.text\n";
@@ -412,35 +445,34 @@ void backend::Generator::gen_func(const Function& func) {
     
     rv_insts = new std::vector<rv_inst*>();
     reg_allocator = new regAllocator(*rv_insts);
-
+    goto_label_lines = new std::vector<int>();
+    auto &ngoto_label_lines = *goto_label_lines;
 
     // unique goto labels
-    std::vector<int> goto_label_lines;
     for(int i = 0; i < func.InstVec.size(); i++) {
         Instruction* inst = func.InstVec[i];
         
         if(inst->op == Operator::_goto) {
-            goto_label_lines.push_back(i + stoi(inst->des.name));
+            ngoto_label_lines.push_back(i + stoi(inst->des.name));
         }
     }
-    std::sort(goto_label_lines.begin(), goto_label_lines.end());
-    goto_label_lines.erase(std::unique(goto_label_lines.begin(), goto_label_lines.end()), goto_label_lines.end());
-    auto get_label_id = [&] (int line_num) -> int {
-        auto it = std::lower_bound(goto_label_lines.begin(), goto_label_lines.end(), line_num);
-        if(it == goto_label_lines.end() || *it != line_num) return -1;
-        return (int) (it - goto_label_lines.begin());
-    };
+    std::sort(ngoto_label_lines.begin(), ngoto_label_lines.end());
+    ngoto_label_lines.erase(std::unique(ngoto_label_lines.begin(), ngoto_label_lines.end()), ngoto_label_lines.end());
+    
 
     for(int i = 0; i < func.InstVec.size(); i++) {
         int label_id = -1;
         if((label_id = get_label_id(i)) != -1) {
             rv_insts->push_back(new rv_inst(".L" + std::to_string(label_id)));
+            // break;
         }
         Instruction* inst = func.InstVec[i];
         std::cerr << inst->draw() << "\n";
         gen_instr(*inst, i);
     }
     for(int i = 0; i < rv_insts->size(); i++) {
+    std::cerr<< "\t.size\t" << rv_insts->size() << "now:" << i << "\n";
+    std::cerr << "\t" << (*rv_insts)[i]->draw() << "\n";
         if((*rv_insts)[i]->is_label) {
             fout << (*rv_insts)[i]->label << ":\n";
         } else{
@@ -451,6 +483,7 @@ void backend::Generator::gen_func(const Function& func) {
     fout << "\t.size\t" + func.name + ", .-" + func.name + "\n";
     delete rv_insts;
     delete reg_allocator;
+    delete goto_label_lines;
 }
 
 void backend::Generator::gen_instr(const Instruction& inst, int time) {
@@ -478,7 +511,8 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
                 rv_insts->push_back(mv_inst);
             }
         } break;
-        
+
+        case Operator::sub:
         case Operator::add: {
             // add rd, rs, rt
             rvREG rs1 = reg_allocator->getReg(inst.op1, time);
@@ -486,7 +520,13 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
             rvREG rd = reg_allocator->getReg(inst.des, time);
 
             rv_inst *op_inst = new rv_inst();
-            op_inst->op = rvOPCODE::ADD;
+            switch(inst.op) {
+                case Operator::add: op_inst->op = rvOPCODE::ADD; break;
+                case Operator::sub: op_inst->op = rvOPCODE::SUB; break;
+                default:
+                    assert(0);
+                    break;
+            }
             op_inst->rs1 = rs1;
             op_inst->rs2 = rs2;
             op_inst->rd = rd;
@@ -498,10 +538,25 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
             
         } break;
 
+        case Operator::_goto: {
+            rv_inst *goto_inst = new rv_inst();
+            if(inst.op1.name == "null") {
+                goto_inst->op = rvOPCODE::J;
+            } else {
+                goto_inst->op = rvOPCODE::BNEZ;
+                goto_inst->rs1 = reg_allocator->getReg(inst.op1, time);
+            }
+            goto_inst->label = ".L" + std::to_string(get_label_id(time + stoi(inst.des.name)));
+            rv_insts->push_back(goto_inst);
+        } break;
+
         case Operator::call: {
 
         } break;
 
+        case Operator::neq:
+        case Operator::lss:
+        case Operator::gtr:
         case Operator::eq: {
             // des = op1 == 0
 
@@ -509,7 +564,16 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
             rvREG rd = reg_allocator->getReg(inst.des, time);
 
             rv_inst *op_inst = new rv_inst();
-            op_inst->op = rvOPCODE::SEQZ;
+            switch(inst.op) {
+                case Operator::neq: op_inst->op = rvOPCODE::SNEZ; break;
+                case Operator::lss: op_inst->op = rvOPCODE::SLTZ; break;
+                case Operator::gtr: op_inst->op = rvOPCODE::SGTZ; break;
+                case Operator::eq: op_inst->op = rvOPCODE::SEQZ; break;
+                default:
+                    assert(0);
+                    break;
+            }
+            
             op_inst->rs1 = rs1;
             op_inst->rd = rd;
             // seqz des, op1
@@ -517,25 +581,7 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
 
         } break;
 
-        case Operator::neq: {
-
-        } break;
-
-        case Operator::leq: {
-
-        } break;
-
-        case Operator::lss: {
-
-        } break;
-
-        case Operator::geq: {
-
-        } break;
-
-        case Operator::gtr: {
-
-        } break;
+        
 
         default:
             assert(0 && "invalid operator");

@@ -82,7 +82,9 @@ struct Generator {
 
     regAllocator *reg_allocator;
     std::vector<rv_inst*> *rv_insts;
+    std::vector<int> *goto_label_lines;
     // generate wrapper function
+    int get_label_id(int line_num);
     void gen();
     void gen_func(const ir::Function&);
     void gen_instr(const ir::Instruction&, int time);
