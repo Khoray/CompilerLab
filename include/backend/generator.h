@@ -42,7 +42,7 @@ struct stackVarMap {
 
 
 class regAllocator {
-private:
+public:
     std::vector<rv::rv_inst*> &rv_insts;
     std::map<ir::Operand, rvREG, operandCmp> op2reg_map;
     std::map<ir::Operand, rvFREG, operandCmp> fop2freg_map;
@@ -83,6 +83,8 @@ struct Generator {
     regAllocator *reg_allocator;
     std::vector<rv_inst*> *rv_insts;
     std::vector<int> *goto_label_lines;
+    std::set<rv_inst*> *ret_set;
+    int max_call_overflow_paras;
     // generate wrapper function
     int get_label_id(int line_num);
     void gen();

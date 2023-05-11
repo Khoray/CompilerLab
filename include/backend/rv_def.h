@@ -87,7 +87,7 @@ enum class rvOPCODE {
     ADDI, XORI, ORI, ANDI, SLLI, SRLI, SRAI, SLTI, SLTIU, SEQZ, SNEZ, SLTZ, SGTZ,   // immediate
     FLW, FSW, LW, SW,                                                 // load & store
     BEQ, BNE, BLT, BGE, BLTU, BGEU, BNEZ,                         // conditional branch
-    JAL, JALR,                                              // jump
+    JAL, JALR, JR,                                              // jump
 
     // RV32M Multiply Extension
 

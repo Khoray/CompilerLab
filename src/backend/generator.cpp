@@ -112,9 +112,11 @@ string rv::toString(rvOPCODE op) {
     case rvOPCODE::LI:
         return "li";
     case rvOPCODE::MOV:
-        return "mov";
+        return "mv";
     case rvOPCODE::J:
         return "j";
+    case rvOPCODE::JR:
+        return "jr";
     default:
         std::cerr << (int) op << "\n";
         assert(0 && "gg");
@@ -191,6 +193,9 @@ string rv::rv_inst::draw() const {
     case rvOPCODE::J:
         ret += label;
         break;
+    case rvOPCODE::JR:
+        ret += toString(rs1);
+        break;
     default:
         std::cerr << (int) op << "\n";
         assert(0 && "gg");
@@ -239,6 +244,9 @@ backend::regAllocator::regAllocator(std::vector<rv::rv_inst*> &rv_insts_out): re
     available_regs.insert(rvREG::X5);
     available_regs.insert(rvREG::X6);
     available_regs.insert(rvREG::X7);
+    for(int i = 10; i <= 17; i++) {
+        available_regs.insert((rvREG) i);
+    }
 }
 
 void backend::regAllocator::update(rv::rvREG r, int time) {
@@ -447,6 +455,69 @@ void backend::Generator::gen_func(const Function& func) {
     reg_allocator = new regAllocator(*rv_insts);
     goto_label_lines = new std::vector<int>();
     auto &ngoto_label_lines = *goto_label_lines;
+    ret_set = new std::set<rv_inst*>();
+
+    // abi get func parameters
+    int apr = 0, fapr = 0, stackpr = 0;
+    for(int i = 0; i < func.ParameterList.size(); i++) {
+        Operand op = func.ParameterList[i];
+        if(op.type == Type::Int || op.type == Type::IntPtr) {
+            if(apr <= 7) {
+                reg_allocator->reg2op_map[apr] = op;
+                reg_allocator->op2reg_map[op] = (rvREG) apr;
+                reg_allocator->available_regs.erase((rvREG) apr);
+                reg_allocator->reg_using.emplace(reg_allocator->reg_timestamp[apr], (rvREG) apr);
+                apr++;
+            } else {
+                reg_allocator->stack_var_map._table[op] = stackpr * 4;
+                stackpr++;
+            }
+        } else {
+            if(fapr <= 7) {
+                reg_allocator->freg2fop_map[fapr] = op;
+                reg_allocator->fop2freg_map[op] = (rvFREG) fapr;
+                reg_allocator->available_fregs.erase((rvFREG) fapr);
+                reg_allocator->freg_using.emplace(reg_allocator->freg_timestamp[fapr], (rvFREG) fapr);
+                apr++;
+            } else {
+                reg_allocator->stack_var_map._table[op] = stackpr * 4;
+                stackpr++;
+            }
+        }
+    }
+
+    // sp -= frame size
+    rv_inst *spsub_inst = new rv_inst();
+    spsub_inst->op = rvOPCODE::ADDI;
+    spsub_inst->rd = rvREG::X2;
+    spsub_inst->rs1 = rvREG::X2;
+    // sp = sp + ?
+    rv_insts->push_back(spsub_inst);
+    
+    // save ra
+    rv_inst *svra_inst = new rv_inst();
+    svra_inst->op = rvOPCODE::SW;
+    svra_inst->rs2 = rvREG::X1;
+    svra_inst->rs1 = rvREG::X2;
+    // sw ra, ?-4(sp)
+    rv_insts->push_back(svra_inst);
+
+    // save s0
+    rv_inst *svs0_inst = new rv_inst();
+    svs0_inst->op = rvOPCODE::SW;
+    svs0_inst->rs2 = rvREG::X8;
+    svs0_inst->rs1 = rvREG::X2;
+    // sw ra, ?-8(sp)
+    rv_insts->push_back(svs0_inst);
+
+    // s0 = sp + frame size
+    rv_inst *spadd_inst = new rv_inst();
+    spadd_inst->op = rvOPCODE::ADDI;
+    spadd_inst->rd = rvREG::X8;
+    spadd_inst->rs1 = rvREG::X2;
+    // s0 = sp + ?
+    rv_insts->push_back(spadd_inst);
+
 
     // unique goto labels
     for(int i = 0; i < func.InstVec.size(); i++) {
@@ -459,7 +530,7 @@ void backend::Generator::gen_func(const Function& func) {
     std::sort(ngoto_label_lines.begin(), ngoto_label_lines.end());
     ngoto_label_lines.erase(std::unique(ngoto_label_lines.begin(), ngoto_label_lines.end()), ngoto_label_lines.end());
     
-
+    max_call_overflow_paras = 0;
     for(int i = 0; i < func.InstVec.size(); i++) {
         int label_id = -1;
         if((label_id = get_label_id(i)) != -1) {
@@ -470,6 +541,22 @@ void backend::Generator::gen_func(const Function& func) {
         std::cerr << inst->draw() << "\n";
         gen_instr(*inst, i);
     }
+
+    // write back
+    spadd_inst->imm = -(spsub_inst->imm = reg_allocator->stack_var_map.offset);
+    svra_inst->imm = -reg_allocator->stack_var_map.offset - 4;
+    svs0_inst->imm = -reg_allocator->stack_var_map.offset - 8;
+
+    for(rv_inst* reti : *ret_set) {
+        if(reti->rd == rvREG::X2) {
+            reti->imm = -reg_allocator->stack_var_map.offset;
+        } else if(reti->rd == rvREG::X8) {
+            reti->imm = -reg_allocator->stack_var_map.offset - 8;
+        } else {
+            reti->imm = -reg_allocator->stack_var_map.offset - 4;
+        }
+    }
+
     for(int i = 0; i < rv_insts->size(); i++) {
     std::cerr<< "\t.size\t" << rv_insts->size() << "now:" << i << "\n";
     std::cerr << "\t" << (*rv_insts)[i]->draw() << "\n";
@@ -484,6 +571,7 @@ void backend::Generator::gen_func(const Function& func) {
     delete rv_insts;
     delete reg_allocator;
     delete goto_label_lines;
+    delete ret_set;
 }
 
 void backend::Generator::gen_instr(const Instruction& inst, int time) {
@@ -535,7 +623,57 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
         } break;
         
         case Operator::_return: {
-            
+            if(inst.op1.name == "null") {
+                // do nothing
+            } else if(inst.op1.type == Type::Int) {
+                reg_allocator->spill(rvREG::X10);
+                reg_allocator->load(rvREG::X10, inst.op1, time);
+            } else if(inst.op1.type == Type::Float) {
+                reg_allocator->spill(rvFREG::F10);
+                reg_allocator->load(rvFREG::F10, inst.op1, time);
+            } else if(inst.op1.type == Type::IntLiteral) {
+                reg_allocator->spill(rvREG::X10);
+                rv_inst* li_inst = new rv_inst();
+                li_inst->op = rvOPCODE::LI;
+                li_inst->rd = rvREG::X10;
+                li_inst->imm = stoi(inst.op1.name);
+                rv_insts->push_back(li_inst);
+            } else if(inst.op1.type == Type::FloatLiteral) {
+                TODO;
+            }
+        
+            // save s0
+            rv_inst *lds0_inst = new rv_inst();
+            lds0_inst->op = rvOPCODE::LW;
+            lds0_inst->rd = rvREG::X8;
+            lds0_inst->rs1 = rvREG::X2;
+            // sw ra, ?-8(sp)
+            rv_insts->push_back(lds0_inst);
+            ret_set->insert(lds0_inst);
+
+            // load ra
+            rv_inst *ldra_inst = new rv_inst();
+            ldra_inst->op = rvOPCODE::LW;
+            ldra_inst->rd = rvREG::X1;
+            ldra_inst->rs1 = rvREG::X2;
+            // sw ra, ?-4(sp)
+            rv_insts->push_back(ldra_inst);
+            ret_set->insert(ldra_inst);
+
+            // s0 = sp + frame size
+            rv_inst *spadd_inst = new rv_inst();
+            spadd_inst->op = rvOPCODE::ADDI;
+            spadd_inst->rd = rvREG::X2;
+            spadd_inst->rs1 = rvREG::X2;
+            // s0 = sp + ?
+            rv_insts->push_back(spadd_inst);
+
+            // jr ra
+            rv_inst *jr_inst = new rv_inst();
+            jr_inst->op = rvOPCODE::JR;
+            jr_inst->rs1 = rvREG::X1;
+            // s0 = sp + ?
+            rv_insts->push_back(jr_inst);
         } break;
 
         case Operator::_goto: {
@@ -551,7 +689,9 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
         } break;
 
         case Operator::call: {
-
+            CallInst *callinst = (CallInst*) &inst;
+            // TODO: 这里不应该是-8，因为有Int和Float，但是测试点没有
+            max_call_overflow_paras = std::max(max_call_overflow_paras, (int) callinst->argumentList.size() - 8);
         } break;
 
         case Operator::neq:
