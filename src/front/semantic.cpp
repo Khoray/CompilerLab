@@ -1100,13 +1100,16 @@ void frontend::Analyzer::AnalyzeUnaryExp(UnaryExp* root) {
         } else {
             func = get_lib_funcs()->find(funcname)->second;
         }
+        Operand retOp;
         if(func->returnType == Type::Int || func->returnType == Type::null) {
             ret_tmp = tmp_int;
+            retOp = Operand(ret_tmp, Type::Int);
         } else {
             ret_tmp = tmp_float;
+            retOp = Operand(ret_tmp, Type::Float);
         }
         if(root->children[2]->type == NodeType::TERMINAL) {
-            current_func->addInst(new ir::CallInst(Operand(funcname, func->returnType), Operand(ret_tmp, func->returnType)));
+            current_func->addInst(new ir::CallInst(Operand(funcname, func->returnType), retOp));
             
         } else {
             FuncRParams* funcRParams = (FuncRParams*) root->children[2];

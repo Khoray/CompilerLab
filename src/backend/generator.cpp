@@ -117,8 +117,10 @@ string rv::toString(rvOPCODE op) {
         return "j";
     case rvOPCODE::JR:
         return "jr";
+    case rvOPCODE::CALL:
+        return "call";
     default:
-        std::cerr << (int) op << "\n";
+//        std::cerr << (int) op << "\n";
         assert(0 && "gg");
         break;
     }
@@ -196,8 +198,11 @@ string rv::rv_inst::draw() const {
     case rvOPCODE::JR:
         ret += toString(rs1);
         break;
+    case rvOPCODE::CALL:
+        ret += label;
+        break;
     default:
-        std::cerr << (int) op << "\n";
+//        std::cerr << (int) op << "\n";
         assert(0 && "gg");
         break;
     }
@@ -232,6 +237,7 @@ int backend::stackVarMap::find_operand(Operand op) {
     if(it == _table.end()) {
         // op should be Type::Int or Type::Float when op not exist in stack.
         // because Ptr should alloc first, then Ptr is in stack.
+//        std::cerr << "op.name:" << op.name << ' ' << "op.type:" << (int) op.type << "\n";
         assert(op.type == Type::Float || op.type == Type::Int);
         return add_operand(op);
     } else {
@@ -241,6 +247,10 @@ int backend::stackVarMap::find_operand(Operand op) {
 
 // reg allocator
 backend::regAllocator::regAllocator(std::vector<rv::rv_inst*> &rv_insts_out): reg2op_map(32), freg2fop_map(32), reg_timestamp(32), freg_timestamp(32), rv_insts(rv_insts_out) {
+    add_availables();
+}
+
+void backend::regAllocator::add_availables() {
     available_regs.insert(rvREG::X5);
     available_regs.insert(rvREG::X6);
     available_regs.insert(rvREG::X7);
@@ -427,6 +437,22 @@ rvFREG backend::regAllocator::fgetReg(Operand op, int time) {
     return r;
 }
 
+void backend::regAllocator::clearregs() {
+    op2reg_map.clear();
+    fop2freg_map.clear();
+    reg2op_map = std::vector<ir::Operand>(32);
+    freg2fop_map = std::vector<ir::Operand>(32);
+
+    available_regs.clear();
+    available_fregs.clear();
+    add_availables();
+    // LRU Cache
+    reg_using.clear();
+    freg_using.clear();
+    reg_timestamp = std::vector<int>(32);
+    freg_timestamp = std::vector<int>(32);
+}
+
 // gen
 backend::Generator::Generator(ir::Program& p, std::ofstream& f): program(p), fout(f) {}
 
@@ -458,11 +484,11 @@ void backend::Generator::gen_func(const Function& func) {
     ret_set = new std::set<rv_inst*>();
 
     // abi get func parameters
-    int apr = 0, fapr = 0, stackpr = 0;
+    int apr = 10, fapr = 10, stackpr = 0;
     for(int i = 0; i < func.ParameterList.size(); i++) {
         Operand op = func.ParameterList[i];
         if(op.type == Type::Int || op.type == Type::IntPtr) {
-            if(apr <= 7) {
+            if(apr <= 17) {
                 reg_allocator->reg2op_map[apr] = op;
                 reg_allocator->op2reg_map[op] = (rvREG) apr;
                 reg_allocator->available_regs.erase((rvREG) apr);
@@ -473,12 +499,12 @@ void backend::Generator::gen_func(const Function& func) {
                 stackpr++;
             }
         } else {
-            if(fapr <= 7) {
+            if(fapr <= 17) {
                 reg_allocator->freg2fop_map[fapr] = op;
                 reg_allocator->fop2freg_map[op] = (rvFREG) fapr;
                 reg_allocator->available_fregs.erase((rvFREG) fapr);
                 reg_allocator->freg_using.emplace(reg_allocator->freg_timestamp[fapr], (rvFREG) fapr);
-                apr++;
+                fapr++;
             } else {
                 reg_allocator->stack_var_map._table[op] = stackpr * 4;
                 stackpr++;
@@ -538,7 +564,7 @@ void backend::Generator::gen_func(const Function& func) {
             // break;
         }
         Instruction* inst = func.InstVec[i];
-        std::cerr << inst->draw() << "\n";
+//        std::cerr << inst->draw() << "\n";
         gen_instr(*inst, i);
     }
 
@@ -558,8 +584,8 @@ void backend::Generator::gen_func(const Function& func) {
     }
 
     for(int i = 0; i < rv_insts->size(); i++) {
-    std::cerr<< "\t.size\t" << rv_insts->size() << "now:" << i << "\n";
-    std::cerr << "\t" << (*rv_insts)[i]->draw() << "\n";
+//    std::cerr<< "\t.size\t" << rv_insts->size() << "now:" << i << "\n";
+//    std::cerr << "\t" << (*rv_insts)[i]->draw() << "\n";
         if((*rv_insts)[i]->is_label) {
             fout << (*rv_insts)[i]->label << ":\n";
         } else{
@@ -667,6 +693,7 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
             spadd_inst->rs1 = rvREG::X2;
             // s0 = sp + ?
             rv_insts->push_back(spadd_inst);
+            ret_set->insert(spadd_inst);
 
             // jr ra
             rv_inst *jr_inst = new rv_inst();
@@ -692,6 +719,87 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
             CallInst *callinst = (CallInst*) &inst;
             // TODO: 这里不应该是-8，因为有Int和Float，但是测试点没有
             max_call_overflow_paras = std::max(max_call_overflow_paras, (int) callinst->argumentList.size() - 8);
+
+            // store all temp
+            std::vector<rvREG> store_regs;
+            std::vector<rvFREG> store_fregs;
+            for(auto reg_info : reg_allocator->reg_using) {
+                store_regs.push_back(reg_info.second);
+            }
+            for(auto reg_info : reg_allocator->freg_using) {
+                store_fregs.push_back(reg_info.second);
+            }
+            for(auto reg : store_regs) {
+                reg_allocator->spill(reg);
+            }
+            for(auto reg : store_fregs) {
+                reg_allocator->spill(reg);
+            }
+
+            // load arguments to a0~a7
+            // abi get func parameters
+            int apr = 10, fapr = 10, stackpr = 0;
+            for(int i = 0; i < callinst->argumentList.size(); i++) {
+                Operand op = callinst->argumentList[i];
+                if(op.type == Type::Int || op.type == Type::IntPtr) {
+                    if(apr <= 17) {
+                        reg_allocator->load((rvREG) apr, op, time);
+                        apr++;
+                    } else {
+                        reg_allocator->load(rvREG::X5, op, time);
+
+                        rv_inst* sw_inst = new rv_inst();
+                        sw_inst->op = rvOPCODE::SW;
+                        sw_inst->rs2 = rvREG::X5;
+                        sw_inst->rs1 = rvREG::X2;
+                        sw_inst->imm = stackpr * 4;
+                        rv_insts->push_back(sw_inst);
+
+                        reg_allocator->spill(rvREG::X5);
+                        // TODO: optimizer
+
+                        stackpr++;
+                    }
+                } else {
+                    if(fapr <= 17) {
+                        reg_allocator->load((rvFREG) fapr, op, time);
+                        fapr++;
+                    } else {
+                        // assume not go to here
+                        TODO;
+                        stackpr++;
+                    }
+                }
+            }
+
+            // call function
+            rv_inst* call_inst = new rv_inst();
+            call_inst->op = rvOPCODE::CALL;
+            call_inst->label = inst.op1.name;
+            rv_insts->push_back(call_inst);
+
+            // process return val
+            Function calledFunction;
+            for(Function f : program.functions) {
+                if(f.name == inst.op1.name) {
+                    calledFunction = f;
+                    break;
+                }
+            }
+            reg_allocator->clearregs();
+            if(calledFunction.returnType == Type::Int) {
+                reg_allocator->reg2op_map[(int) rvREG::X10] = inst.des;
+                reg_allocator->op2reg_map[inst.des] = rvREG::X10;
+                reg_allocator->available_regs.erase(rvREG::X10);
+                reg_allocator->reg_using.emplace(reg_allocator->reg_timestamp[(int) rvREG::X10], rvREG::X10);
+            } else if(calledFunction.returnType == Type::Float) {
+                reg_allocator->freg2fop_map[(int) rvFREG::F10] = inst.des;
+                reg_allocator->fop2freg_map[inst.des] = rvFREG::F10;
+                reg_allocator->available_fregs.erase(rvFREG::F10);
+                reg_allocator->freg_using.emplace(reg_allocator->freg_timestamp[(int) rvFREG::F10], rvFREG::F10);
+            }
+
+            
         } break;
 
         case Operator::neq:

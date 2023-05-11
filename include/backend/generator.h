@@ -61,6 +61,8 @@ public:
 public:
     regAllocator(std::vector<rv::rv_inst*> &rv_insts);
 
+    void add_availables();
+
     void update(rvREG r, int time);
     void update(rvFREG r, int time);
 
@@ -71,6 +73,8 @@ public:
 
     rv::rvREG getReg(ir::Operand, int time);
     rv::rvFREG fgetReg(ir::Operand, int time);
+
+    void clearregs();
 };
 
 
