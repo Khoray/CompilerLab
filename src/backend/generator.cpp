@@ -59,6 +59,12 @@ string rv::toString(rvOPCODE op) {
         return "slt";
     case rvOPCODE::SLTU:
         return "sltu";
+    case rvOPCODE::MUL:
+        return "mul";
+    case rvOPCODE::DIV:
+        return "div";
+    case rvOPCODE::REM:
+        return "rem";
     case rvOPCODE::ADDI:
         return "addi";
     case rvOPCODE::XORI:
@@ -141,6 +147,9 @@ string rv::rv_inst::draw() const {
     case rvOPCODE::SRA:
     case rvOPCODE::SLT:
     case rvOPCODE::SLTU:
+    case rvOPCODE::MUL:
+    case rvOPCODE::DIV:
+    case rvOPCODE::REM:
         ret += toString(rd) + ", " + toString(rs1) + ", " + toString(rs2);
         break;
     case rvOPCODE::ADDI:
@@ -626,6 +635,9 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
             }
         } break;
 
+        case Operator::mul:
+        case Operator::div:
+        case Operator::mod:
         case Operator::sub:
         case Operator::add: {
             // add rd, rs, rt
@@ -637,6 +649,9 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
             switch(inst.op) {
                 case Operator::add: op_inst->op = rvOPCODE::ADD; break;
                 case Operator::sub: op_inst->op = rvOPCODE::SUB; break;
+                case Operator::mul: op_inst->op = rvOPCODE::MUL; break;
+                case Operator::div: op_inst->op = rvOPCODE::DIV; break;
+                case Operator::mod: op_inst->op = rvOPCODE::REM; break;
                 default:
                     assert(0);
                     break;
@@ -832,6 +847,7 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
         
 
         default:
+            std::cerr << "Operatorid:" << (int) inst.op << "\n";
             assert(0 && "invalid operator");
             break;
     }

@@ -83,7 +83,7 @@ std::string toString(rvFREG r);  // implement this in ur own way
 // add instruction u need here!
 enum class rvOPCODE {
     // RV32I Base Integer Instructions
-    ADD, SUB, XOR, OR, AND, SLL, SRL, SRA, SLT, SLTU,       // arithmetic & logic
+    ADD, SUB, XOR, OR, AND, SLL, SRL, SRA, SLT, SLTU, MUL, DIV, REM,       // arithmetic & logic
     ADDI, XORI, ORI, ANDI, SLLI, SRLI, SRAI, SLTI, SLTIU, SEQZ, SNEZ, SLTZ, SGTZ,   // immediate
     FLW, FSW, LW, SW,                                                 // load & store
     BEQ, BNE, BLT, BGE, BLTU, BGEU, BNEZ,                         // conditional branch
