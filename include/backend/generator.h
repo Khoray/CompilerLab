@@ -41,7 +41,8 @@ struct stackVarMap {
 };
 
 
-struct regAllocator {
+class regAllocator {
+private:
     std::vector<rv::rv_inst*> &rv_insts;
     std::map<ir::Operand, rvREG, operandCmp> op2reg_map;
     std::map<ir::Operand, rvFREG, operandCmp> fop2freg_map;
@@ -57,6 +58,7 @@ struct regAllocator {
     std::vector<int> freg_timestamp;
 
     stackVarMap stack_var_map;
+public:
     regAllocator(std::vector<rv::rv_inst*> &rv_insts);
 
     void update(rvREG r, int time);
@@ -78,10 +80,12 @@ struct Generator {
 
     Generator(ir::Program&, std::ofstream&);
 
+    regAllocator *reg_allocator;
+    std::vector<rv_inst*> *rv_insts;
     // generate wrapper function
     void gen();
     void gen_func(const ir::Function&);
-    void gen_instr(const ir::Instruction&);
+    void gen_instr(const ir::Instruction&, int time);
 };
 
 

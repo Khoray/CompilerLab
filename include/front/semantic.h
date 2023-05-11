@@ -124,6 +124,7 @@ struct Analyzer {
     ir::Program get_ir_program(CompUnit*);
     void insert_ste(std::string name, STE ste);
     void insert_inst(ir::Instruction* inst);
+    void addRelInst(ir::Operand, ir::Operand, ir::Operand, TokenType);
 
     void AnalyzeCompUnit(CompUnit*);
     void AnalyzeDecl(Decl*);

@@ -1,6 +1,8 @@
 #include"backend/generator.h"
 
 #include<assert.h>
+#include<iostream>
+#include<algorithm>
 
 using std::string;
 using namespace rv;
@@ -138,7 +140,7 @@ string rv::rv_inst::draw() const {
         ret += toString(rd) + ", " + std::to_string((int) imm) + "(" + toString(rs1) + ")";
         break;
     case rvOPCODE::SW:
-        ret += toString(rs1) + ", " + std::to_string((int) imm) + "(" + toString(rs2) + ")";
+        ret += toString(rs2) + ", " + std::to_string((int) imm) + "(" + toString(rs1) + ")";
         break;
     case rvOPCODE::BEQ:
     case rvOPCODE::BNE:
@@ -171,6 +173,10 @@ string rv::rv_inst::draw() const {
     return ret;
 }
 
+rv::rv_inst::rv_inst() {}
+rv::rv_inst::rv_inst(string label_name): is_label(true), label(label_name) {}
+
+
 // operand cmp
 bool backend::operandCmp::operator() (const ir::Operand& a, const ir::Operand& b) const {
     return a.name < b.name;
@@ -202,7 +208,11 @@ int backend::stackVarMap::find_operand(Operand op) {
 }
 
 // reg allocator
-backend::regAllocator::regAllocator(std::vector<rv::rv_inst*> &rv_insts_out): reg2op_map(32), freg2fop_map(32), reg_timestamp(32), freg_timestamp(32), rv_insts(rv_insts_out) {}
+backend::regAllocator::regAllocator(std::vector<rv::rv_inst*> &rv_insts_out): reg2op_map(32), freg2fop_map(32), reg_timestamp(32), freg_timestamp(32), rv_insts(rv_insts_out) {
+    available_regs.insert(rvREG::X5);
+    available_regs.insert(rvREG::X6);
+    available_regs.insert(rvREG::X7);
+}
 
 void backend::regAllocator::update(rv::rvREG r, int time) {
     auto it = reg_using.find(std::make_pair(reg_timestamp[(int) r], r));
@@ -386,5 +396,150 @@ rvFREG backend::regAllocator::fgetReg(Operand op, int time) {
 backend::Generator::Generator(ir::Program& p, std::ofstream& f): program(p), fout(f) {}
 
 void backend::Generator::gen() {
-    TODO;
+    // do global things
+    fout << "\t.text\n";
+    for(auto i : program.globalVal) {
+        fout << "\t.comm\t" + i.val.name + "," + std::to_string(i.maxlen * 4) + ",4" + "\n";
+    }
+    for(auto i : program.functions) {
+        gen_func(i);
+    }
+
+}
+
+void backend::Generator::gen_func(const Function& func) {
+    fout << "\t.align\t1\n\t.global\t" + func.name + "\n\t.type\t" + func.name + ", @function\n" + func.name + ":\n";
+    
+    rv_insts = new std::vector<rv_inst*>();
+    reg_allocator = new regAllocator(*rv_insts);
+
+
+    // unique goto labels
+    std::vector<int> goto_label_lines;
+    for(int i = 0; i < func.InstVec.size(); i++) {
+        Instruction* inst = func.InstVec[i];
+        
+        if(inst->op == Operator::_goto) {
+            goto_label_lines.push_back(i + stoi(inst->des.name));
+        }
+    }
+    std::sort(goto_label_lines.begin(), goto_label_lines.end());
+    goto_label_lines.erase(std::unique(goto_label_lines.begin(), goto_label_lines.end()), goto_label_lines.end());
+    auto get_label_id = [&] (int line_num) -> int {
+        auto it = std::lower_bound(goto_label_lines.begin(), goto_label_lines.end(), line_num);
+        if(it == goto_label_lines.end() || *it != line_num) return -1;
+        return (int) (it - goto_label_lines.begin());
+    };
+
+    for(int i = 0; i < func.InstVec.size(); i++) {
+        int label_id = -1;
+        if((label_id = get_label_id(i)) != -1) {
+            rv_insts->push_back(new rv_inst(".L" + std::to_string(label_id)));
+        }
+        Instruction* inst = func.InstVec[i];
+        std::cerr << inst->draw() << "\n";
+        gen_instr(*inst, i);
+    }
+    for(int i = 0; i < rv_insts->size(); i++) {
+        if((*rv_insts)[i]->is_label) {
+            fout << (*rv_insts)[i]->label << ":\n";
+        } else{
+            fout << "\t" << (*rv_insts)[i]->draw() << "\n";
+        }
+    }
+
+    fout << "\t.size\t" + func.name + ", .-" + func.name + "\n";
+    delete rv_insts;
+    delete reg_allocator;
+}
+
+void backend::Generator::gen_instr(const Instruction& inst, int time) {
+    switch(inst.op) {
+        case Operator::mov:
+        case Operator::def: {
+            if(inst.op1.type == Type::IntLiteral) {
+                rvREG r = reg_allocator->getReg(inst.des, time);
+
+                rv_inst *li_inst = new rv_inst();
+                li_inst->op = rvOPCODE::LI;
+                li_inst->imm = stoi(inst.op1.name);
+                li_inst->rd = r;
+                // li r, op1.name
+                rv_insts->push_back(li_inst);
+            } else {
+                rvREG rs1 = reg_allocator->getReg(inst.op1, time);
+                rvREG rd = reg_allocator->getReg(inst.des, time);
+
+                rv_inst *mv_inst = new rv_inst();
+                mv_inst->op = rvOPCODE::MOV;
+                mv_inst->rs1 = rs1;
+                mv_inst->rd = rd;
+                // li r, op1.name
+                rv_insts->push_back(mv_inst);
+            }
+        } break;
+        
+        case Operator::add: {
+            // add rd, rs, rt
+            rvREG rs1 = reg_allocator->getReg(inst.op1, time);
+            rvREG rs2 = reg_allocator->getReg(inst.op2, time);
+            rvREG rd = reg_allocator->getReg(inst.des, time);
+
+            rv_inst *op_inst = new rv_inst();
+            op_inst->op = rvOPCODE::ADD;
+            op_inst->rs1 = rs1;
+            op_inst->rs2 = rs2;
+            op_inst->rd = rd;
+            // add rd, rs1, rs2
+            rv_insts->push_back(op_inst);
+        } break;
+        
+        case Operator::_return: {
+            
+        } break;
+
+        case Operator::call: {
+
+        } break;
+
+        case Operator::eq: {
+            // des = op1 == 0
+
+            rvREG rs1 = reg_allocator->getReg(inst.op1, time);
+            rvREG rd = reg_allocator->getReg(inst.des, time);
+
+            rv_inst *op_inst = new rv_inst();
+            op_inst->op = rvOPCODE::SEQZ;
+            op_inst->rs1 = rs1;
+            op_inst->rd = rd;
+            // seqz des, op1
+            rv_insts->push_back(op_inst);
+
+        } break;
+
+        case Operator::neq: {
+
+        } break;
+
+        case Operator::leq: {
+
+        } break;
+
+        case Operator::lss: {
+
+        } break;
+
+        case Operator::geq: {
+
+        } break;
+
+        case Operator::gtr: {
+
+        } break;
+
+        default:
+            assert(0 && "invalid operator");
+            break;
+    }
+
 }

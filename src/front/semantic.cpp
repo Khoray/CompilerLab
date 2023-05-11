@@ -242,6 +242,46 @@ void frontend::Analyzer::insert_inst(Instruction* inst) {
     }
 }
 
+void frontend::Analyzer::addRelInst(Operand op1, Operand op2, Operand des, TokenType op) {
+    assert(des.type == Type::Int);
+    store_tmp();
+    Operand tempvar = get_tmp_var();
+    insert_inst(new Instruction(op1, op2, tempvar, Operator::sub));
+    switch(op) {
+        case TokenType::EQL: {
+            insert_inst(new Instruction(tempvar, Operand("0", Type::IntLiteral), des, Operator::eq));
+        } break;
+
+        case TokenType::NEQ: {
+            insert_inst(new Instruction(tempvar, Operand("0", Type::IntLiteral), des, Operator::neq));
+        } break;
+
+        case TokenType::LSS: {
+            insert_inst(new Instruction(tempvar, Operand("0", Type::IntLiteral), des, Operator::lss));
+        } break;
+
+        case TokenType::GTR: {
+            insert_inst(new Instruction(tempvar, Operand("0", Type::IntLiteral), des, Operator::gtr));
+        } break;
+
+        case TokenType::LEQ: {
+            insert_inst(new Instruction(tempvar, Operand("0", Type::IntLiteral), des, Operator::gtr));
+            insert_inst(new Instruction(des, Operand("0", Type::IntLiteral), des, Operator::eq));
+        } break;
+
+        case TokenType::GEQ: {
+            insert_inst(new Instruction(tempvar, Operand("0", Type::IntLiteral), des, Operator::lss));
+            insert_inst(new Instruction(des, Operand("0", Type::IntLiteral), des, Operator::eq));
+        } break;
+        
+        default:
+            TODO;
+            break;
+        }
+        
+    restore_tmp();
+}
+
 void frontend::Analyzer::AnalyzeCompUnit(CompUnit* root) {
     log("fuck");
     for(int i = 0; i < (int) root->children.size(); i++) {
@@ -1371,15 +1411,16 @@ void frontend::Analyzer::AnalyzeRelExp(RelExp* root) {
                 } else {
                     uid = addexp->v;
                 }
-                if(sign->token.type == TokenType::LSS) {
-                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::lss));
-                } else if(sign->token.type == TokenType::GTR) {
-                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::gtr));
-                } else if(sign->token.type == TokenType::LEQ) {
-                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::leq));
-                } else if(sign->token.type == TokenType::GEQ) {
-                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::geq));
-                }
+                // if(sign->token.type == TokenType::LSS) {
+                //     current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::lss));
+                // } else if(sign->token.type == TokenType::GTR) {
+                //     current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::gtr));
+                // } else if(sign->token.type == TokenType::LEQ) {
+                //     current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::leq));
+                // } else if(sign->token.type == TokenType::GEQ) {
+                //     current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::geq));
+                // }
+                addRelInst(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), sign->token.type);
             }
         } else {
             root->v = tmp_float;
@@ -1484,11 +1525,12 @@ void frontend::Analyzer::AnalyzeEqExp(EqExp* root) {
                 } else {
                     uid = relexp->v;
                 }
-                if(sign->token.type == TokenType::EQL) {
-                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::eq));
-                } else if(sign->token.type == TokenType::NEQ) {
-                    current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::neq));
-                }
+                // if(sign->token.type == TokenType::EQL) {
+                //     current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::eq));
+                // } else if(sign->token.type == TokenType::NEQ) {
+                //     current_func->addInst(new Instruction(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), Operator::neq));
+                // }
+                addRelInst(Operand(root->v, root->t), Operand(uid, Type::Int), Operand(root->v, root->t), sign->token.type);
             }
         } else {
             root->v = tmp_float;
