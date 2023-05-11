@@ -171,17 +171,44 @@ string rv::rv_inst::draw() const {
     return ret;
 }
 
-// stackVarMap
-backend::stackVarMap::stackVarMap(): offset(-20) {}
+// operand cmp
+bool backend::operandCmp::operator() (const ir::Operand& a, const ir::Operand& b) const {
+    return a.name < b.name;
+}
 
-int backend::stackVarMap::add_operand(Operand op, uint32_t size) { TODO; }
-int backend::stackVarMap::find_operand(Operand op) { TODO; }
+// stackVarMap
+backend::stackVarMap::stackVarMap(): offset(-16) {}
+
+int backend::stackVarMap::add_operand(Operand op, uint32_t size) { 
+    // op.type == Ptr: alloc
+    // op.type == Int or Float: called by find_operand
+    // store in spill
+    // only alloc
+    offset -= size;
+    _table[op] = offset;
+    return offset;
+}
+
+int backend::stackVarMap::find_operand(Operand op) {
+    auto it = _table.find(op);
+    if(it == _table.end()) {
+        // op should be Type::Int or Type::Float when op not exist in stack.
+        // because Ptr should alloc first, then Ptr is in stack.
+        assert(op.type == Type::Float || op.type == Type::Int);
+        return add_operand(op);
+    } else {
+        return it->second;
+    }
+}
 
 // reg allocator
 backend::regAllocator::regAllocator(std::vector<rv::rv_inst*> &rv_insts_out): reg2op_map(32), freg2fop_map(32), reg_timestamp(32), freg_timestamp(32), rv_insts(rv_insts_out) {}
 
 void backend::regAllocator::update(rv::rvREG r, int time) {
     auto it = reg_using.find(std::make_pair(reg_timestamp[(int) r], r));
+    // r should in using
+    assert(it != reg_using.end());
+
     reg_using.erase(it);
     reg_timestamp[(int) r] = time;
     reg_using.emplace(time, r);
@@ -190,6 +217,9 @@ void backend::regAllocator::update(rv::rvREG r, int time) {
 void backend::regAllocator::update(rv::rvFREG r, int time) {
     auto it = freg_using.find(std::make_pair(freg_timestamp[(int) r], r));
     freg_using.erase(it);
+    // r should in using
+    assert(it != freg_using.end());
+
     freg_timestamp[(int) r] = time;
     freg_using.emplace(time, r);
 }
@@ -298,6 +328,61 @@ void backend::regAllocator::load(rvFREG r, ir::Operand op, int time) {
     }
 }
 
+rvREG backend::regAllocator::getReg(Operand op, int time) {
+    // first check whether op has a reg
+    if(op2reg_map.count(op)) {
+        // op has reg, return reg belong to it
+        rvREG r = op2reg_map[op];
+        update(r, time);
+        return r;
+    }
+    if(available_regs.size()) {
+        // have available regs, directly alloc available reg to op
+        rvREG r = *available_regs.begin();
+        load(r, op, time);
+        return r;
+    }
+    // no available regs
+    // spill the LRU opreg
+    rvREG r;
+    int last_time;
+    std::tie(last_time, r) = *reg_using.begin();
+    reg_using.erase(reg_using.begin());
+    spill(r);
+    
+    // load to r
+    load(r, op, time);
+    return r;
+}
+
+rvFREG backend::regAllocator::fgetReg(Operand op, int time) {
+    // first check whether op has a reg
+    if(fop2freg_map.count(op)) {
+        // op has reg, return reg belong to it
+        rvFREG r = fop2freg_map[op];
+        update(r, time);
+        return r;
+    }
+    if(available_fregs.size()) {
+        // have available regs, directly alloc available reg to op
+        rvFREG r = *available_fregs.begin();
+        load(r, op, time);
+        return r;
+    }
+    // no available regs
+    // spill the LRU opreg
+    rvFREG r;
+    int last_time;
+    std::tie(last_time, r) = *freg_using.begin();
+    freg_using.erase(freg_using.begin());
+    spill(r);
+    
+    // load to r
+    load(r, op, time);
+    return r;
+}
+
+// gen
 backend::Generator::Generator(ir::Program& p, std::ofstream& f): program(p), fout(f) {}
 
 void backend::Generator::gen() {

@@ -17,8 +17,11 @@ using namespace rv;
 namespace backend {
 
 // it is a map bewteen variable and its mem addr, the mem addr of a local variable can be identified by ($s0 + off)
+struct operandCmp {
+    bool operator() (const ir::Operand& a, const ir::Operand& b) const;
+};
 struct stackVarMap {
-    std::map<ir::Operand, int> _table;
+    std::map<ir::Operand, int, operandCmp> _table;
     int offset; // offset to s0
 
     stackVarMap();
@@ -37,11 +40,6 @@ struct stackVarMap {
     int add_operand(ir::Operand, uint32_t size = 4);
 };
 
-struct operandCmp {
-    bool operator() (const ir::Operand& a, const ir::Operand& b) const {
-        return a.name < b.name;
-    }
-};
 
 struct regAllocator {
     std::vector<rv::rv_inst*> &rv_insts;
