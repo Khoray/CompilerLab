@@ -21,10 +21,11 @@ struct operandCmp {
     bool operator() (const ir::Operand& a, const ir::Operand& b) const;
 };
 struct stackVarMap {
+    const std::vector<ir::GlobalVal> &globalVal;
     std::map<ir::Operand, int, operandCmp> _table;
     int offset; // offset to s0
 
-    stackVarMap();
+    stackVarMap(const std::vector<ir::GlobalVal> &gb);
 
     /**
      * @brief find the addr of a ir::Operand
@@ -59,7 +60,7 @@ public:
 
     stackVarMap stack_var_map;
 public:
-    regAllocator(std::vector<rv::rv_inst*> &rv_insts);
+    regAllocator(std::vector<rv::rv_inst*> &rv_insts, const std::vector<ir::GlobalVal> &globalVal);
 
     void add_availables();
 

@@ -170,10 +170,18 @@ string rv::rv_inst::draw() const {
         ret += toString(rd) + ", " + toString(rs1);
         break;
     case rvOPCODE::LW:
-        ret += toString(rd) + ", " + std::to_string((int) imm) + "(" + toString(rs1) + ")";
+        if(imm == INT32_MAX) {
+            ret += toString(rd) + ", " + label;
+        } else {
+            ret += toString(rd) + ", " + std::to_string((int) imm) + "(" + toString(rs1) + ")";
+        }
         break;
     case rvOPCODE::SW:
-        ret += toString(rs2) + ", " + std::to_string((int) imm) + "(" + toString(rs1) + ")";
+        if(imm == INT32_MAX) {
+            ret += toString(rs2) + ", " + label + ", " + toString(rvREG::X31);
+        } else {
+            ret += toString(rs2) + ", " + std::to_string((int) imm) + "(" + toString(rs1) + ")";
+        }
         break;
     case rvOPCODE::BEQ:
     case rvOPCODE::BNE:
@@ -229,7 +237,7 @@ bool backend::operandCmp::operator() (const ir::Operand& a, const ir::Operand& b
 }
 
 // stackVarMap
-backend::stackVarMap::stackVarMap(): offset(-16) {}
+backend::stackVarMap::stackVarMap(const std::vector<ir::GlobalVal> &gb): offset(-16), globalVal(gb) {}
 
 int backend::stackVarMap::add_operand(Operand op, uint32_t size) { 
     // op.type == Ptr: alloc
@@ -244,9 +252,15 @@ int backend::stackVarMap::add_operand(Operand op, uint32_t size) {
 int backend::stackVarMap::find_operand(Operand op) {
     auto it = _table.find(op);
     if(it == _table.end()) {
+        // find op in globalvar
+        for(GlobalVal gv : globalVal) {
+            if(gv.val.name == op.name) {
+                return INT32_MAX;
+            }
+        }
         // op should be Type::Int or Type::Float when op not exist in stack.
         // because Ptr should alloc first, then Ptr is in stack.
-//        std::cerr << "op.name:" << op.name << ' ' << "op.type:" << (int) op.type << "\n";
+       std::cerr << "op.name:" << op.name << ' ' << "op.type:" << (int) op.type << "\n";
         assert(op.type == Type::Float || op.type == Type::Int);
         return add_operand(op);
     } else {
@@ -255,7 +269,7 @@ int backend::stackVarMap::find_operand(Operand op) {
 }
 
 // reg allocator
-backend::regAllocator::regAllocator(std::vector<rv::rv_inst*> &rv_insts_out): reg2op_map(32), freg2fop_map(32), reg_timestamp(32), freg_timestamp(32), rv_insts(rv_insts_out) {
+backend::regAllocator::regAllocator(std::vector<rv::rv_inst*> &rv_insts_out, const std::vector<ir::GlobalVal> &globalVal_out): reg2op_map(32), freg2fop_map(32), reg_timestamp(32), freg_timestamp(32), rv_insts(rv_insts_out), stack_var_map(globalVal_out) {
     add_availables();
 }
 
@@ -300,6 +314,9 @@ void backend::regAllocator::spill(rvREG r) {
     store_inst->rs1 = rvREG::X8;
     store_inst->rs2 = r;
     store_inst->imm = pos;
+    if(pos == INT32_MAX) {
+        store_inst->label = operand.name;
+    }
     // sw r, pos(s0)
     rv_insts.push_back(store_inst);
 
@@ -320,6 +337,9 @@ void backend::regAllocator::spill(rvFREG r) {
     store_inst->rs1 = rvREG::X8;
     store_inst->frs2 = r;
     store_inst->imm = pos;
+    if(pos == INT32_MAX) {
+        store_inst->label = operand.name;
+    }
     // fsw r, pos(s0)
     rv_insts.push_back(store_inst);
 
@@ -356,6 +376,9 @@ void backend::regAllocator::load(rvREG r, ir::Operand op, int time) {
         load->rs1 = rvREG::X8;
         load->imm = pos;
         load->rd = r;
+        if(pos == INT32_MAX) {
+            load->label = op.name;
+        }
         rv_insts.push_back(load);
     }
 }
@@ -388,6 +411,9 @@ void backend::regAllocator::load(rvFREG r, ir::Operand op, int time) {
         load->rs1 = rvREG::X8;
         load->imm = pos;
         load->frd = r;
+        if(pos == INT32_MAX) {
+            load->label = op.name;
+        }
         rv_insts.push_back(load);
     }
 }
@@ -475,7 +501,7 @@ void backend::Generator::gen() {
     // do global things
     fout << "\t.text\n";
     for(auto i : program.globalVal) {
-        fout << "\t.comm\t" + i.val.name + "," + std::to_string(i.maxlen * 4) + ",4" + "\n";
+        fout << "\t.comm\t" + i.val.name + "," + std::to_string(std::max(1, i.maxlen) * 4) + ",4" + "\n";
     }
     for(auto i : program.functions) {
         gen_func(i);
@@ -487,7 +513,7 @@ void backend::Generator::gen_func(const Function& func) {
     fout << "\t.align\t1\n\t.global\t" + func.name + "\n\t.type\t" + func.name + ", @function\n" + func.name + ":\n";
     
     rv_insts = new std::vector<rv_inst*>();
-    reg_allocator = new regAllocator(*rv_insts);
+    reg_allocator = new regAllocator(*rv_insts, program.globalVal);
     goto_label_lines = new std::vector<int>();
     auto &ngoto_label_lines = *goto_label_lines;
     ret_set = new std::set<rv_inst*>();
@@ -664,6 +690,26 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
         } break;
         
         case Operator::_return: {
+            // store all temp
+            std::vector<rvREG> store_regs;
+            std::vector<rvFREG> store_fregs;
+            for(auto reg_info : reg_allocator->reg_using) {
+                if(reg_allocator->stack_var_map.find_operand(reg_allocator->reg2op_map[(int) reg_info.second]) == INT32_MAX) {
+                    store_regs.push_back(reg_info.second);
+                }
+            }
+            for(auto reg_info : reg_allocator->freg_using) {
+                // if(reg_allocator->stack_var_map.find_operand(reg_allocator->freg2fop_map[(int) reg_info.second]) == INT32_MAX) {
+                    store_fregs.push_back(reg_info.second);
+                // }
+            }
+            for(auto reg : store_regs) {
+                reg_allocator->spill(reg);
+            }
+            for(auto reg : store_fregs) {
+                reg_allocator->spill(reg);
+            }
+
             if(inst.op1.name == "null") {
                 // do nothing
             } else if(inst.op1.type == Type::Int) {
@@ -682,7 +728,7 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
             } else if(inst.op1.type == Type::FloatLiteral) {
                 TODO;
             }
-        
+            
             // save s0
             rv_inst *lds0_inst = new rv_inst();
             lds0_inst->op = rvOPCODE::LW;
@@ -844,7 +890,9 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
 
         } break;
 
-        
+        case Operator::store: {
+
+        } break;
 
         default:
             std::cerr << "Operatorid:" << (int) inst.op << "\n";

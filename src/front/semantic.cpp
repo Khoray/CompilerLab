@@ -523,9 +523,9 @@ void frontend::Analyzer::AnalyzeVarDef(VarDef* root) {
             //     restore_tmp();
             // }
         } else {
-            Operand op1 = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
+            Operand op1 = Operand("0", ste.operand.type == Type::Int ? Type::IntLiteral : Type::FloatLiteral);
             Operand op2 = Operand();
-            Operand des = Operand("0", ste.operand.type == Type::Int ? Type::IntLiteral : Type::FloatLiteral);
+            Operand des = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
             insert_inst(new Instruction(op1, op2, des, Operator::def));
         }
 
