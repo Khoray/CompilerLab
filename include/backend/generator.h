@@ -90,6 +90,7 @@ struct Generator {
     std::vector<int> *goto_label_lines;
     std::set<rv_inst*> *ret_set;
     int max_call_overflow_paras;
+    int global_label_id;
     // generate wrapper function
     int get_label_id(int line_num);
     void gen();

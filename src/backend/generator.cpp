@@ -260,6 +260,7 @@ int backend::stackVarMap::find_operand(Operand op) {
         }
         // op should be Type::Int or Type::Float when op not exist in stack.
         // because Ptr should alloc first, then Ptr is in stack.
+        // TODO;
        std::cerr << "op.name:" << op.name << ' ' << "op.type:" << (int) op.type << "\n";
         assert(op.type == Type::Float || op.type == Type::Int);
         return add_operand(op);
@@ -322,6 +323,7 @@ void backend::regAllocator::spill(rvREG r) {
 
     available_regs.insert(r);
     op2reg_map.erase(op2reg_map.find(operand));
+    reg_using.erase(reg_using.find({reg_timestamp[(int) r], r}));
     reg2op_map[(int) r] = Operand();
 }
 
@@ -345,6 +347,7 @@ void backend::regAllocator::spill(rvFREG r) {
 
     available_fregs.insert(r);
     fop2freg_map.erase(fop2freg_map.find(operand));
+    freg_using.erase(freg_using.find({freg_timestamp[(int) r], r}));
     freg2fop_map[(int) r] = Operand();
 }
 
@@ -364,6 +367,7 @@ void backend::regAllocator::load(rvREG r, ir::Operand op, int time) {
 
         available_regs.insert(mv->rs1);
         op2reg_map[op] = r;
+        reg_using.erase(reg_using.find({reg_timestamp[(int) mv->rs1], mv->rs1}));
         reg2op_map[(int) mv->rs1] = Operand();
         reg2op_map[(int) r] = op;
     } else {
@@ -399,6 +403,7 @@ void backend::regAllocator::load(rvFREG r, ir::Operand op, int time) {
 
         available_fregs.insert(mv->frs1);
         fop2freg_map[op] = r;
+        freg_using.erase(freg_using.find({reg_timestamp[(int) mv->frs1], mv->frs1}));
         freg2fop_map[(int) mv->frs1] = Operand();
         freg2fop_map[(int) r] = op;
     } else {
@@ -437,7 +442,7 @@ rvREG backend::regAllocator::getReg(Operand op, int time) {
     rvREG r;
     int last_time;
     std::tie(last_time, r) = *reg_using.begin();
-    reg_using.erase(reg_using.begin());
+    // std::cerr << "fuck\n";
     spill(r);
     
     // load to r
@@ -489,12 +494,12 @@ void backend::regAllocator::clearregs() {
 }
 
 // gen
-backend::Generator::Generator(ir::Program& p, std::ofstream& f): program(p), fout(f) {}
+backend::Generator::Generator(ir::Program& p, std::ofstream& f): program(p), fout(f), global_label_id(0) {}
 
 int backend::Generator::get_label_id(int line_num) {
     auto it = std::lower_bound(goto_label_lines->begin(), goto_label_lines->end(), line_num);
     if(it == goto_label_lines->end() || *it != line_num) return -1;
-    return (int) (it - goto_label_lines->begin());
+    return (int) (it - goto_label_lines->begin() + global_label_id);
 }
 
 void backend::Generator::gen() {
@@ -591,6 +596,7 @@ void backend::Generator::gen_func(const Function& func) {
     std::sort(ngoto_label_lines.begin(), ngoto_label_lines.end());
     ngoto_label_lines.erase(std::unique(ngoto_label_lines.begin(), ngoto_label_lines.end()), ngoto_label_lines.end());
     
+    // gen insts
     max_call_overflow_paras = 0;
     for(int i = 0; i < func.InstVec.size(); i++) {
         int label_id = -1;
@@ -599,7 +605,7 @@ void backend::Generator::gen_func(const Function& func) {
             // break;
         }
         Instruction* inst = func.InstVec[i];
-//        std::cerr << inst->draw() << "\n";
+        std::cerr << inst->draw() << "\n";
         gen_instr(*inst, i);
     }
 
@@ -629,6 +635,7 @@ void backend::Generator::gen_func(const Function& func) {
     }
 
     fout << "\t.size\t" + func.name + ", .-" + func.name + "\n";
+    global_label_id += ngoto_label_lines.size();
     delete rv_insts;
     delete reg_allocator;
     delete goto_label_lines;
@@ -649,6 +656,7 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
                 // li r, op1.name
                 rv_insts->push_back(li_inst);
             } else {
+                // std::cerr << "inst.op1:" << inst.op1.name << " \n";
                 rvREG rs1 = reg_allocator->getReg(inst.op1, time);
                 rvREG rd = reg_allocator->getReg(inst.des, time);
 
@@ -694,6 +702,7 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
             std::vector<rvREG> store_regs;
             std::vector<rvFREG> store_fregs;
             for(auto reg_info : reg_allocator->reg_using) {
+                    // std::cerr << (int) reg_info.second << "mp:" << reg_allocator->reg2op_map[(int) reg_info.second].name << "\n";
                 if(reg_allocator->stack_var_map.find_operand(reg_allocator->reg2op_map[(int) reg_info.second]) == INT32_MAX) {
                     store_regs.push_back(reg_info.second);
                 }
@@ -765,6 +774,26 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
         } break;
 
         case Operator::_goto: {
+            // store all temp
+            std::vector<rvREG> store_regs;
+            std::vector<rvFREG> store_fregs;
+            for(auto reg_info : reg_allocator->reg_using) {
+                    // std::cerr << (int) reg_info.second << "mp:" << reg_allocator->reg2op_map[(int) reg_info.second].name << "\n";
+                if(reg_allocator->stack_var_map.find_operand(reg_allocator->reg2op_map[(int) reg_info.second]) == INT32_MAX) {
+                    store_regs.push_back(reg_info.second);
+                }
+            }
+            for(auto reg_info : reg_allocator->freg_using) {
+                // if(reg_allocator->stack_var_map.find_operand(reg_allocator->freg2fop_map[(int) reg_info.second]) == INT32_MAX) {
+                    store_fregs.push_back(reg_info.second);
+                // }
+            }
+            for(auto reg : store_regs) {
+                reg_allocator->spill(reg);
+            }
+            for(auto reg : store_fregs) {
+                reg_allocator->spill(reg);
+            }
             rv_inst *goto_inst = new rv_inst();
             if(inst.op1.name == "null") {
                 goto_inst->op = rvOPCODE::J;
