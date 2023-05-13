@@ -274,7 +274,7 @@ void backend::regAllocator::add_availables() {
     available_regs.insert(rvREG::X5);
     available_regs.insert(rvREG::X6);
     available_regs.insert(rvREG::X7);
-    for(int i = 10; i <= 17; i++) {
+    for(int i = 10; i <= 10; i++) {
         available_regs.insert((rvREG) i);
     }
 }
@@ -304,18 +304,19 @@ void backend::regAllocator::spill(rvREG r) {
     if(operand.name == "null") {
         return;
     }
-    if(operand.type != Type::IntPtr && operand.type != Type::FloatPtr) {
-        int pos = stack_var_map.find_operand(operand);
+    int pos = stack_var_map.find_operand(operand);
 
-        rv_inst* store_inst = new rv_inst();
-        store_inst->op = rvOPCODE::SW;
-        store_inst->rs1 = rvREG::X8;
-        store_inst->rs2 = r;
-        store_inst->imm = pos;
-        if(pos == INT32_MAX) {
-            store_inst->symbol = operand.name;
-        }
-        // sw r, pos(s0)
+    rv_inst* store_inst = new rv_inst();
+    store_inst->op = rvOPCODE::SW;
+    store_inst->rs1 = rvREG::X8;
+    store_inst->rs2 = r;
+    store_inst->imm = pos;
+    if(pos == INT32_MAX) {
+        store_inst->symbol = operand.name;
+        // 如果是全局变量 且 是指针，才不用加rv_insts sw
+    }
+    // sw r, pos(s0)
+    if(!(pos == INT32_MAX && (operand.type == Type::IntPtr || operand.type == Type::FloatPtr))) {
         rv_insts.push_back(store_inst);
     }
 
@@ -602,11 +603,29 @@ void backend::Generator::gen_func(const Function& func) {
     for(int i = 0; i < func.InstVec.size(); i++) {
         int label_id = -1;
         if((label_id = get_label_id(i)) != -1) {
+            // store all temp
+            std::vector<rvREG> store_regs;
+            std::vector<rvFREG> store_fregs;
+            std::cerr << "reg_using.size():" << reg_allocator->reg_using.size() << "\n";
+            for(auto reg_info : reg_allocator->reg_using) {
+                    // std::cerr << (int) reg_info.second << "mp:" << reg_allocator->reg2op_map[(int) reg_info.second].name << "\n";
+                store_regs.push_back(reg_info.second);
+            }
+            for(auto reg_info : reg_allocator->freg_using) {
+                store_fregs.push_back(reg_info.second);
+            }
+            for(auto reg : store_regs) {
+                reg_allocator->spill(reg);
+            }
+            for(auto reg : store_fregs) {
+                reg_allocator->spill(reg);
+            }
             rv_insts->push_back(new rv_inst(".L" + std::to_string(label_id)));
+            reg_allocator->clearregs();
             // break;
         }
         Instruction* inst = func.InstVec[i];
-        // std::cerr << inst->draw() << "\n";
+        std::cerr << inst->draw() << "\n";
         gen_instr(*inst, i);
     }
 
@@ -653,7 +672,7 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
             addi_inst->op = rvOPCODE::ADDI;
             addi_inst->rd = r;
             addi_inst->rs1 = rvREG::X8;
-            addi_inst->imm = reg_allocator->stack_var_map.offset;
+            addi_inst->imm = reg_allocator->stack_var_map.offset + 4;
             rv_insts->push_back(addi_inst);
         } break;
 
@@ -870,19 +889,25 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
         } break;
 
         case Operator::_goto: {
+            rv_inst *goto_inst = new rv_inst();
+            if(inst.op1.name == "null") {
+                goto_inst->op = rvOPCODE::J;
+            } else {
+                goto_inst->op = rvOPCODE::BNEZ;
+                goto_inst->rs1 = reg_allocator->getReg(inst.op1, time);
+                std::cerr << "goto condition:" << toString(goto_inst->rs1) << "\n";
+            }
+            goto_inst->label = ".L" + std::to_string(get_label_id(time + stoi(inst.des.name)));
             // store all temp
             std::vector<rvREG> store_regs;
             std::vector<rvFREG> store_fregs;
+            std::cerr << "reg_using.size():" << reg_allocator->reg_using.size() << "\n";
             for(auto reg_info : reg_allocator->reg_using) {
                     // std::cerr << (int) reg_info.second << "mp:" << reg_allocator->reg2op_map[(int) reg_info.second].name << "\n";
-                if(reg_allocator->stack_var_map.find_operand(reg_allocator->reg2op_map[(int) reg_info.second]) == INT32_MAX) {
-                    store_regs.push_back(reg_info.second);
-                }
+                store_regs.push_back(reg_info.second);
             }
             for(auto reg_info : reg_allocator->freg_using) {
-                // if(reg_allocator->stack_var_map.find_operand(reg_allocator->freg2fop_map[(int) reg_info.second]) == INT32_MAX) {
-                    store_fregs.push_back(reg_info.second);
-                // }
+                store_fregs.push_back(reg_info.second);
             }
             for(auto reg : store_regs) {
                 reg_allocator->spill(reg);
@@ -890,15 +915,8 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
             for(auto reg : store_fregs) {
                 reg_allocator->spill(reg);
             }
-            rv_inst *goto_inst = new rv_inst();
-            if(inst.op1.name == "null") {
-                goto_inst->op = rvOPCODE::J;
-            } else {
-                goto_inst->op = rvOPCODE::BNEZ;
-                goto_inst->rs1 = reg_allocator->getReg(inst.op1, time);
-            }
-            goto_inst->label = ".L" + std::to_string(get_label_id(time + stoi(inst.des.name)));
             rv_insts->push_back(goto_inst);
+            std::cerr << "goto:" << goto_inst->draw() << "\n";
         } break;
 
         case Operator::call: {
