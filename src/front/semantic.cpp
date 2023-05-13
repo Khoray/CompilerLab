@@ -1075,7 +1075,12 @@ void frontend::Analyzer::AnalyzeUnaryExp(UnaryExp* root) {
         } else {
             log("UnaryExp not computable, func:%s, optype:%d", current_func->name.c_str(), unaryOp->op);
             if(unaryOp->op == TokenType::NOT) {
-                insert_inst(new Instruction(Operand(root->v, root->t), Operand(), Operand(root->v, root->t), Operator::_not));
+                insert_inst(new Instruction(
+                    Operand(root->v, root->t),
+                    Operand("0", root->t == Type::Int ? Type::IntLiteral : Type::FloatLiteral),
+                    Operand(root->v, root->t),
+                    root->t == Type::Int ? Operator::eq : Operator::feq
+                ));
             } else if(unaryOp->op == TokenType::MINU) {
                 store_tmp();
                 if(root->t == Type::Int) {

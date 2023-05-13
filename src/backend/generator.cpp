@@ -274,7 +274,7 @@ void backend::regAllocator::add_availables() {
     available_regs.insert(rvREG::X5);
     available_regs.insert(rvREG::X6);
     available_regs.insert(rvREG::X7);
-    for(int i = 10; i <= 10; i++) {
+    for(int i = 10; i <= 17; i++) {
         available_regs.insert((rvREG) i);
     }
 }
@@ -606,7 +606,7 @@ void backend::Generator::gen_func(const Function& func) {
             // store all temp
             std::vector<rvREG> store_regs;
             std::vector<rvFREG> store_fregs;
-            std::cerr << "reg_using.size():" << reg_allocator->reg_using.size() << "\n";
+            // std::cerr << "reg_using.size():" << reg_allocator->reg_using.size() << "\n";
             for(auto reg_info : reg_allocator->reg_using) {
                     // std::cerr << (int) reg_info.second << "mp:" << reg_allocator->reg2op_map[(int) reg_info.second].name << "\n";
                 store_regs.push_back(reg_info.second);
@@ -625,7 +625,7 @@ void backend::Generator::gen_func(const Function& func) {
             // break;
         }
         Instruction* inst = func.InstVec[i];
-        std::cerr << inst->draw() << "\n";
+        // std::cerr << inst->draw() << "\n";
         gen_instr(*inst, i);
     }
 
@@ -895,13 +895,13 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
             } else {
                 goto_inst->op = rvOPCODE::BNEZ;
                 goto_inst->rs1 = reg_allocator->getReg(inst.op1, time);
-                std::cerr << "goto condition:" << toString(goto_inst->rs1) << "\n";
+                // std::cerr << "goto condition:" << toString(goto_inst->rs1) << "\n";
             }
             goto_inst->label = ".L" + std::to_string(get_label_id(time + stoi(inst.des.name)));
             // store all temp
             std::vector<rvREG> store_regs;
             std::vector<rvFREG> store_fregs;
-            std::cerr << "reg_using.size():" << reg_allocator->reg_using.size() << "\n";
+            // std::cerr << "reg_using.size():" << reg_allocator->reg_using.size() << "\n";
             for(auto reg_info : reg_allocator->reg_using) {
                     // std::cerr << (int) reg_info.second << "mp:" << reg_allocator->reg2op_map[(int) reg_info.second].name << "\n";
                 store_regs.push_back(reg_info.second);
@@ -916,7 +916,7 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
                 reg_allocator->spill(reg);
             }
             rv_insts->push_back(goto_inst);
-            std::cerr << "goto:" << goto_inst->draw() << "\n";
+            // std::cerr << "goto:" << goto_inst->draw() << "\n";
         } break;
 
         case Operator::call: {
