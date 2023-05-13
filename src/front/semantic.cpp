@@ -391,10 +391,13 @@ void frontend::Analyzer::AnalyzeConstDef(ConstDef* root) {
         ste.dimension = dimension;
         // alloc memory to ste
         insert_ste(ste.operand.name, ste);
-        Operand op1 = Operand(std::to_string(len), Type::IntLiteral);
-        Operand op2 = Operand();
-        Operand des = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
-        insert_inst(new Instruction(op1, op2, des, Operator::alloc));
+        if(current_func != nullptr) {
+            // 只有局部变量才需要alloc，全局变量不需要alloc
+            Operand op1 = Operand(std::to_string(len), Type::IntLiteral);
+            Operand op2 = Operand();
+            Operand des = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
+            insert_inst(new Instruction(op1, op2, des, Operator::alloc));
+        }
         AnalyzeConstInitVal(index, ste, len, 0, (ConstInitVal*) root->children[constExp_ptr]);
     } else {
         ste.operand = Operand("assert", root->t == Type::Int ? Type::IntLiteral : Type::FloatLiteral);

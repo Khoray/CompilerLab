@@ -12,7 +12,7 @@ def run_compiler(arg1):
     elif step == "-s1":
         oftype = "json"
     elif step == "-s2":
-        step = "-e"
+        step = "-s2e"
         oftype = "out"
     elif step == "-S":
         oftype = "s"

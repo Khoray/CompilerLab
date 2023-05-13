@@ -171,14 +171,14 @@ string rv::rv_inst::draw() const {
         break;
     case rvOPCODE::LW:
         if(imm == INT32_MAX) {
-            ret += toString(rd) + ", " + label;
+            ret += toString(rd) + ", " + symbol;
         } else {
             ret += toString(rd) + ", " + std::to_string((int) imm) + "(" + toString(rs1) + ")";
         }
         break;
     case rvOPCODE::SW:
         if(imm == INT32_MAX) {
-            ret += toString(rs2) + ", " + label + ", " + toString(rvREG::X31);
+            ret += toString(rs2) + ", " + symbol + ", " + toString(rvREG::X31);
         } else {
             ret += toString(rs2) + ", " + std::to_string((int) imm) + "(" + toString(rs1) + ")";
         }
@@ -258,11 +258,7 @@ int backend::stackVarMap::find_operand(Operand op) {
                 return INT32_MAX;
             }
         }
-        // op should be Type::Int or Type::Float when op not exist in stack.
-        // because Ptr should alloc first, then Ptr is in stack.
-        // TODO;
-       std::cerr << "op.name:" << op.name << ' ' << "op.type:" << (int) op.type << "\n";
-        assert(op.type == Type::Float || op.type == Type::Int);
+    //    std::cerr << "op.name:" << op.name << ' ' << "op.type:" << (int) op.type << "\n";
         return add_operand(op);
     } else {
         return it->second;
@@ -308,18 +304,20 @@ void backend::regAllocator::spill(rvREG r) {
     if(operand.name == "null") {
         return;
     }
-    int pos = stack_var_map.find_operand(operand);
+    if(operand.type != Type::IntPtr && operand.type != Type::FloatPtr) {
+        int pos = stack_var_map.find_operand(operand);
 
-    rv_inst* store_inst = new rv_inst();
-    store_inst->op = rvOPCODE::SW;
-    store_inst->rs1 = rvREG::X8;
-    store_inst->rs2 = r;
-    store_inst->imm = pos;
-    if(pos == INT32_MAX) {
-        store_inst->label = operand.name;
+        rv_inst* store_inst = new rv_inst();
+        store_inst->op = rvOPCODE::SW;
+        store_inst->rs1 = rvREG::X8;
+        store_inst->rs2 = r;
+        store_inst->imm = pos;
+        if(pos == INT32_MAX) {
+            store_inst->symbol = operand.name;
+        }
+        // sw r, pos(s0)
+        rv_insts.push_back(store_inst);
     }
-    // sw r, pos(s0)
-    rv_insts.push_back(store_inst);
 
     available_regs.insert(r);
     op2reg_map.erase(op2reg_map.find(operand));
@@ -340,7 +338,7 @@ void backend::regAllocator::spill(rvFREG r) {
     store_inst->frs2 = r;
     store_inst->imm = pos;
     if(pos == INT32_MAX) {
-        store_inst->label = operand.name;
+        store_inst->symbol = operand.name;
     }
     // fsw r, pos(s0)
     rv_insts.push_back(store_inst);
@@ -381,7 +379,10 @@ void backend::regAllocator::load(rvREG r, ir::Operand op, int time) {
         load->imm = pos;
         load->rd = r;
         if(pos == INT32_MAX) {
-            load->label = op.name;
+            load->symbol = op.name;
+            if(op.type == Type::IntPtr || op.type == Type::FloatPtr) {
+                load->op = rvOPCODE::LA;
+            }
         }
         rv_insts.push_back(load);
     }
@@ -417,7 +418,7 @@ void backend::regAllocator::load(rvFREG r, ir::Operand op, int time) {
         load->imm = pos;
         load->frd = r;
         if(pos == INT32_MAX) {
-            load->label = op.name;
+            load->symbol = op.name;
         }
         rv_insts.push_back(load);
     }
@@ -605,7 +606,7 @@ void backend::Generator::gen_func(const Function& func) {
             // break;
         }
         Instruction* inst = func.InstVec[i];
-        std::cerr << inst->draw() << "\n";
+        // std::cerr << inst->draw() << "\n";
         gen_instr(*inst, i);
     }
 
@@ -644,6 +645,101 @@ void backend::Generator::gen_func(const Function& func) {
 
 void backend::Generator::gen_instr(const Instruction& inst, int time) {
     switch(inst.op) {
+        case Operator::alloc: {
+            reg_allocator->stack_var_map.offset -= stoi(inst.op1.name) * 4;
+            rvREG r = reg_allocator->getReg(inst.des, time);
+
+            rv_inst* addi_inst = new rv_inst();
+            addi_inst->op = rvOPCODE::ADDI;
+            addi_inst->rd = r;
+            addi_inst->rs1 = rvREG::X8;
+            addi_inst->imm = reg_allocator->stack_var_map.offset;
+            rv_insts->push_back(addi_inst);
+        } break;
+
+        case Operator::load: {
+            // TODO: add float case
+            assert(inst.op1.type == Type::IntPtr);
+            /*
+            mv t6, op2
+            sll t6, t6, 2
+            add t6, t6, op1
+            lw des, 0(t6)
+            */
+            rv_inst* mv_inst = new rv_inst();
+            mv_inst->op = rvOPCODE::MOV;
+            mv_inst->rd = rvREG::X31;
+            mv_inst->rs1 = reg_allocator->getReg(inst.op2, time);
+            rv_insts->push_back(mv_inst);
+
+            rv_inst* slli_inst = new rv_inst();
+            slli_inst->op = rvOPCODE::SLLI;
+            slli_inst->rd = rvREG::X31;
+            slli_inst->rs1 = rvREG::X31;
+            slli_inst->imm = 2;
+            rv_insts->push_back(slli_inst);
+
+            rv_inst* add_inst = new rv_inst();
+            add_inst->op = rvOPCODE::ADD;
+            add_inst->rd = rvREG::X31;
+            add_inst->rs1 = rvREG::X31;
+            add_inst->rs2 = reg_allocator->getReg(inst.op1, time);
+            rv_insts->push_back(add_inst);
+
+            rv_inst* lw_inst = new rv_inst();
+            lw_inst->op = rvOPCODE::LW;
+            lw_inst->rs1 = rvREG::X31;
+            lw_inst->rd = reg_allocator->getReg(inst.des, time);
+            lw_inst->imm = 0;
+            rv_insts->push_back(lw_inst);
+        } break;
+
+        case Operator::store: {
+            // TODO: add float case
+            assert(inst.op1.type == Type::IntPtr);
+            /*
+            mv t6, op2
+            sll t6, t6, 2
+            add t6, t6, op1
+            lw des, 0(t6)
+            */
+            if(inst.op2.type == Type::Int) {
+                rv_inst* mv_inst = new rv_inst();
+                mv_inst->op = rvOPCODE::MOV;
+                mv_inst->rd = rvREG::X31;
+                mv_inst->rs1 = reg_allocator->getReg(inst.op2, time);
+                rv_insts->push_back(mv_inst);
+
+                rv_inst* slli_inst = new rv_inst();
+                slli_inst->op = rvOPCODE::SLLI;
+                slli_inst->rd = rvREG::X31;
+                slli_inst->rs1 = rvREG::X31;
+                slli_inst->imm = 2;
+                rv_insts->push_back(slli_inst);
+
+                rv_inst* add_inst = new rv_inst();
+                add_inst->op = rvOPCODE::ADD;
+                add_inst->rd = rvREG::X31;
+                add_inst->rs1 = rvREG::X31;
+                add_inst->rs2 = reg_allocator->getReg(inst.op1, time);
+                rv_insts->push_back(add_inst);
+
+                rv_inst* sw_inst = new rv_inst();
+                sw_inst->op = rvOPCODE::SW;
+                sw_inst->rs1 = rvREG::X31;
+                sw_inst->rs2 = reg_allocator->getReg(inst.des, time);
+                sw_inst->imm = 0;
+                rv_insts->push_back(sw_inst);
+            } else {
+                rv_inst* sw_inst = new rv_inst();
+                sw_inst->op = rvOPCODE::SW;
+                sw_inst->rs1 = reg_allocator->getReg(inst.op1, time);
+                sw_inst->rs2 = reg_allocator->getReg(inst.des, time);
+                sw_inst->imm = stoi(inst.op2.name) * 4;
+                rv_insts->push_back(sw_inst);
+            }
+        } break;
+
         case Operator::mov:
         case Operator::def: {
             if(inst.op1.type == Type::IntLiteral) {
@@ -916,10 +1012,6 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
             op_inst->rd = rd;
             // seqz des, op1
             rv_insts->push_back(op_inst);
-
-        } break;
-
-        case Operator::store: {
 
         } break;
 

@@ -108,6 +108,7 @@ def score_compiler(arg1):
                     output_file = output_dir + fname + ".out" 
                     exec_file = output_dir + fname + ".exe"
                     cmd = ' '.join(["riscv32-unknown-linux-gnu-gcc", output_dir + file, "sylib-riscv-linux.a", '-o', exec_file])
+                    print(cmd)
                     os.system(cmd)
                     if not os.path.exists(exec_file):
                         record[file] = {"retval": -1, "err_detail": "executing cmd [" + cmd + "] failed, your assmbly can not produce a executable"}
