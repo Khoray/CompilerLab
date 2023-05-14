@@ -1,4 +1,5 @@
 #include"backend/generator.h"
+#include"front/semantic.h"
 
 #include<assert.h>
 #include<iostream>
@@ -630,17 +631,17 @@ void backend::Generator::gen_func(const Function& func) {
     }
 
     // write back
-    spadd_inst->imm = -(spsub_inst->imm = reg_allocator->stack_var_map.offset);
-    svra_inst->imm = -reg_allocator->stack_var_map.offset - 4;
-    svs0_inst->imm = -reg_allocator->stack_var_map.offset - 8;
+    spadd_inst->imm = -(spsub_inst->imm = reg_allocator->stack_var_map.offset - max_call_overflow_paras * 4);
+    svra_inst->imm = spadd_inst->imm - 4;
+    svs0_inst->imm = spadd_inst->imm - 8;
 
     for(rv_inst* reti : *ret_set) {
         if(reti->rd == rvREG::X2) {
-            reti->imm = -reg_allocator->stack_var_map.offset;
+            reti->imm = spadd_inst->imm;
         } else if(reti->rd == rvREG::X8) {
-            reti->imm = -reg_allocator->stack_var_map.offset - 8;
+            reti->imm = spadd_inst->imm - 8;
         } else {
-            reti->imm = -reg_allocator->stack_var_map.offset - 4;
+            reti->imm = spadd_inst->imm - 4;
         }
     }
 
@@ -984,23 +985,39 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
 
             // process return val
             Function calledFunction;
+            int foundFunction = 0;
             for(Function f : program.functions) {
                 if(f.name == inst.op1.name) {
                     calledFunction = f;
+                    foundFunction = 1;
                     break;
                 }
             }
+            if(!foundFunction) {
+                calledFunction = *frontend::get_lib_funcs()->find(inst.op1.name)->second;
+            }
             reg_allocator->clearregs();
             if(calledFunction.returnType == Type::Int) {
-                reg_allocator->reg2op_map[(int) rvREG::X10] = inst.des;
-                reg_allocator->op2reg_map[inst.des] = rvREG::X10;
-                reg_allocator->available_regs.erase(rvREG::X10);
-                reg_allocator->reg_using.emplace(reg_allocator->reg_timestamp[(int) rvREG::X10], rvREG::X10);
+                // std::cerr << "fuck\n";
+                rv_inst* mv_inst = new rv_inst();
+                mv_inst->op = rvOPCODE::MOV;
+                mv_inst->rs1 = rvREG::X10;
+                mv_inst->rd = reg_allocator->getReg(inst.des, time);
+                rv_insts->push_back(mv_inst);
+                // reg_allocator->reg2op_map[(int) rvREG::X10] = inst.des;
+                // reg_allocator->op2reg_map[inst.des] = rvREG::X10;
+                // reg_allocator->available_regs.erase(rvREG::X10);
+                // reg_allocator->reg_using.emplace(reg_allocator->reg_timestamp[(int) rvREG::X10], rvREG::X10);
             } else if(calledFunction.returnType == Type::Float) {
-                reg_allocator->freg2fop_map[(int) rvFREG::F10] = inst.des;
-                reg_allocator->fop2freg_map[inst.des] = rvFREG::F10;
-                reg_allocator->available_fregs.erase(rvFREG::F10);
-                reg_allocator->freg_using.emplace(reg_allocator->freg_timestamp[(int) rvFREG::F10], rvFREG::F10);
+                rv_inst* mv_inst = new rv_inst();
+                mv_inst->op = rvOPCODE::MOV;
+                mv_inst->frs1 = rvFREG::F10;
+                mv_inst->frd = reg_allocator->fgetReg(inst.des, time);
+                rv_insts->push_back(mv_inst);
+                // reg_allocator->freg2fop_map[(int) rvFREG::F10] = inst.des;
+                // reg_allocator->fop2freg_map[inst.des] = rvFREG::F10;
+                // reg_allocator->available_fregs.erase(rvFREG::F10);
+                // reg_allocator->freg_using.emplace(reg_allocator->freg_timestamp[(int) rvFREG::F10], rvFREG::F10);
             }
 
             
