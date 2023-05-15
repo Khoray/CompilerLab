@@ -288,6 +288,7 @@ void frontend::Analyzer::addFRelInst(Operand op1, Operand op2, Operand des, Toke
     switch(op) {
         case TokenType::EQL: {
             insert_inst(new Instruction(op1, op2, des, Operator::feq));
+            insert_inst(new Instruction(des, Operand("0", Type::IntLiteral), des, Operator::feq));
         } break;
 
         case TokenType::NEQ: {

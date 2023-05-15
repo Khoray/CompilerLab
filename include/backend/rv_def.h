@@ -88,10 +88,10 @@ enum class rvOPCODE {
     FLW, FSW, LW, SW,                                                 // load & store
     BEQ, BNE, BLT, BGE, BLTU, BGEU, BNEZ,                         // conditional branch
     JAL, JALR, JR,                                              // jump
-
     // RV32M Multiply Extension
 
     // RV32F / D Floating-Point Extensions
+    FLSS, FLEQ, FEQ, FCVTSW, FCVTWS, FADD, FSUB, FMUL, FDIV,
 
     // Pseudo Instructions
     LA, LI, MOV, FMOV, J, CALL,                                         // ...

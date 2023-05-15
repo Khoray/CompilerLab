@@ -70,10 +70,10 @@ public:
     void spill(rvREG r);
     void spill(rvFREG r);
     void load(rvREG r, ir::Operand op, int time, int needload);
-    void load(rvFREG r, ir::Operand op, int time);
+    void load(rvFREG r, ir::Operand op, int time, int needload);
 
     rv::rvREG getReg(ir::Operand, int time, int needload);
-    rv::rvFREG fgetReg(ir::Operand, int time);
+    rv::rvFREG fgetReg(ir::Operand, int time, int needload);
 
     void clearregs();
 };

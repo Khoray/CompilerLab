@@ -1,4 +1,5 @@
 import os, platform, subprocess, shutil, sys
+import time
 
 def score_compiler(arg1):
     record = {}
@@ -108,7 +109,6 @@ def score_compiler(arg1):
                     output_file = output_dir + fname + ".out" 
                     exec_file = output_dir + fname + ".exe"
                     cmd = ' '.join(["riscv32-unknown-linux-gnu-gcc", output_dir + file, "sylib-riscv-linux.a", '-o', exec_file])
-                    print(cmd)
                     os.system(cmd)
                     if not os.path.exists(exec_file):
                         record[file] = {"retval": -1, "err_detail": "executing cmd [" + cmd + "] failed, your assmbly can not produce a executable"}
@@ -120,7 +120,9 @@ def score_compiler(arg1):
                     if os.path.exists(input_file):
                         cmd = ' '.join([cmd, "<", input_file])
                     cmd = ' '.join([cmd, ">", output_file])
+                    clk = time.time()
                     cp = subprocess.run(cmd, shell=True, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL)
+                    print("use:", (time.time() - clk) * 1000, "ms")
                     with open(output_file, "a") as f:
                         f.write("\n" + str(cp.returncode))
 
