@@ -351,7 +351,7 @@ void backend::regAllocator::spill(rvFREG r) {
     freg2fop_map[(int) r] = Operand();
 }
 
-void backend::regAllocator::load(rvREG r, ir::Operand op, int time) {
+void backend::regAllocator::load(rvREG r, ir::Operand op, int time, int needload) {
     assert(available_regs.count(r));
     available_regs.erase(r);
     reg_using.emplace(reg_timestamp[(int) r], r);
@@ -363,7 +363,9 @@ void backend::regAllocator::load(rvREG r, ir::Operand op, int time) {
         mv->op = rvOPCODE::MOV;
         mv->rs1 = op2reg_map[op];
         mv->rd = r;
-        rv_insts.push_back(mv);
+        if(needload) {
+            rv_insts.push_back(mv);
+        }
 
         available_regs.insert(mv->rs1);
         op2reg_map[op] = r;
@@ -386,7 +388,9 @@ void backend::regAllocator::load(rvREG r, ir::Operand op, int time) {
                 load->op = rvOPCODE::LA;
             }
         }
-        rv_insts.push_back(load);
+        if(needload) {
+            rv_insts.push_back(load);
+        }
     }
 }
 
@@ -426,7 +430,7 @@ void backend::regAllocator::load(rvFREG r, ir::Operand op, int time) {
     }
 }
 
-rvREG backend::regAllocator::getReg(Operand op, int time) {
+rvREG backend::regAllocator::getReg(Operand op, int time, int needload) {
     // first check whether op has a reg
     if(op2reg_map.count(op)) {
         // op has reg, return reg belong to it
@@ -437,7 +441,7 @@ rvREG backend::regAllocator::getReg(Operand op, int time) {
     if(available_regs.size()) {
         // have available regs, directly alloc available reg to op
         rvREG r = *available_regs.begin();
-        load(r, op, time);
+        load(r, op, time, needload);
         return r;
     }
     // no available regs
@@ -449,7 +453,7 @@ rvREG backend::regAllocator::getReg(Operand op, int time) {
     spill(r);
     
     // load to r
-    load(r, op, time);
+    load(r, op, time, needload);
     return r;
 }
 
@@ -494,6 +498,37 @@ void backend::regAllocator::clearregs() {
     freg_using.clear();
     reg_timestamp = std::vector<int>(32);
     freg_timestamp = std::vector<int>(32);
+}
+
+// float const table
+string backend::FloatConstTable::add_float_const(float fx) {
+    assert(!float_const_to_string_map.count(fx));
+    string ret = (float_const_to_string_map[fx] = ".LC" + std::to_string(float_const_to_string_map.size()));
+    return ret;
+}
+string backend::FloatConstTable::find_float_const(float fx) {
+    if(float_const_to_string_map.count(fx)) {
+        return float_const_to_string_map[fx];
+    } else {
+        return add_float_const(fx);
+    }
+}
+
+backend::FloatConstTable::FloatConstTable(std::ofstream &ost): fout(ost) {}
+
+void backend::FloatConstTable::gen_rodata() {
+    fout << "\t.section\t.rodata\n";
+    auto getword = [&] (float fx) -> unsigned int {
+        return *reinterpret_cast<unsigned int*>(&fx);
+    };
+    for(auto it : float_const_to_string_map) {
+        float val;
+        string label;
+        tie(val, label) = it;
+        fout << "\t.align\t2\n";
+        fout << label << ":\n";
+        fout << "\t.word\t" << getword(val) << "\n";
+    }
 }
 
 // gen
@@ -667,7 +702,7 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
     switch(inst.op) {
         case Operator::alloc: {
             reg_allocator->stack_var_map.offset -= stoi(inst.op1.name) * 4;
-            rvREG r = reg_allocator->getReg(inst.des, time);
+            rvREG r = reg_allocator->getReg(inst.des, time, 0);
 
             rv_inst* addi_inst = new rv_inst();
             addi_inst->op = rvOPCODE::ADDI;
@@ -689,7 +724,7 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
             rv_inst* mv_inst = new rv_inst();
             mv_inst->op = rvOPCODE::MOV;
             mv_inst->rd = rvREG::X31;
-            mv_inst->rs1 = reg_allocator->getReg(inst.op2, time);
+            mv_inst->rs1 = reg_allocator->getReg(inst.op2, time, 1);
             rv_insts->push_back(mv_inst);
 
             rv_inst* slli_inst = new rv_inst();
@@ -703,13 +738,13 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
             add_inst->op = rvOPCODE::ADD;
             add_inst->rd = rvREG::X31;
             add_inst->rs1 = rvREG::X31;
-            add_inst->rs2 = reg_allocator->getReg(inst.op1, time);
+            add_inst->rs2 = reg_allocator->getReg(inst.op1, time, 1);
             rv_insts->push_back(add_inst);
 
             rv_inst* lw_inst = new rv_inst();
             lw_inst->op = rvOPCODE::LW;
             lw_inst->rs1 = rvREG::X31;
-            lw_inst->rd = reg_allocator->getReg(inst.des, time);
+            lw_inst->rd = reg_allocator->getReg(inst.des, time, 0);
             lw_inst->imm = 0;
             rv_insts->push_back(lw_inst);
         } break;
@@ -727,7 +762,7 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
                 rv_inst* mv_inst = new rv_inst();
                 mv_inst->op = rvOPCODE::MOV;
                 mv_inst->rd = rvREG::X31;
-                mv_inst->rs1 = reg_allocator->getReg(inst.op2, time);
+                mv_inst->rs1 = reg_allocator->getReg(inst.op2, time, 1);
                 rv_insts->push_back(mv_inst);
 
                 rv_inst* slli_inst = new rv_inst();
@@ -741,20 +776,20 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
                 add_inst->op = rvOPCODE::ADD;
                 add_inst->rd = rvREG::X31;
                 add_inst->rs1 = rvREG::X31;
-                add_inst->rs2 = reg_allocator->getReg(inst.op1, time);
+                add_inst->rs2 = reg_allocator->getReg(inst.op1, time, 1);
                 rv_insts->push_back(add_inst);
 
                 rv_inst* sw_inst = new rv_inst();
                 sw_inst->op = rvOPCODE::SW;
                 sw_inst->rs1 = rvREG::X31;
-                sw_inst->rs2 = reg_allocator->getReg(inst.des, time);
+                sw_inst->rs2 = reg_allocator->getReg(inst.des, time, 1);
                 sw_inst->imm = 0;
                 rv_insts->push_back(sw_inst);
             } else {
                 rv_inst* sw_inst = new rv_inst();
                 sw_inst->op = rvOPCODE::SW;
-                sw_inst->rs1 = reg_allocator->getReg(inst.op1, time);
-                sw_inst->rs2 = reg_allocator->getReg(inst.des, time);
+                sw_inst->rs1 = reg_allocator->getReg(inst.op1, time, 1);
+                sw_inst->rs2 = reg_allocator->getReg(inst.des, time, 1);
                 sw_inst->imm = stoi(inst.op2.name) * 4;
                 rv_insts->push_back(sw_inst);
             }
@@ -763,7 +798,7 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
         case Operator::mov:
         case Operator::def: {
             if(inst.op1.type == Type::IntLiteral) {
-                rvREG r = reg_allocator->getReg(inst.des, time);
+                rvREG r = reg_allocator->getReg(inst.des, time, 0);
 
                 rv_inst *li_inst = new rv_inst();
                 li_inst->op = rvOPCODE::LI;
@@ -773,8 +808,8 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
                 rv_insts->push_back(li_inst);
             } else {
                 // std::cerr << "inst.op1:" << inst.op1.name << " \n";
-                rvREG rs1 = reg_allocator->getReg(inst.op1, time);
-                rvREG rd = reg_allocator->getReg(inst.des, time);
+                rvREG rs1 = reg_allocator->getReg(inst.op1, time, 1);
+                rvREG rd = reg_allocator->getReg(inst.des, time, 0);
 
                 rv_inst *mv_inst = new rv_inst();
                 mv_inst->op = rvOPCODE::MOV;
@@ -791,9 +826,9 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
         case Operator::sub:
         case Operator::add: {
             // add rd, rs, rt
-            rvREG rs1 = reg_allocator->getReg(inst.op1, time);
-            rvREG rs2 = reg_allocator->getReg(inst.op2, time);
-            rvREG rd = reg_allocator->getReg(inst.des, time);
+            rvREG rs1 = reg_allocator->getReg(inst.op1, time, 1);
+            rvREG rs2 = reg_allocator->getReg(inst.op2, time, 1);
+            rvREG rd = reg_allocator->getReg(inst.des, time, 0);
 
             rv_inst *op_inst = new rv_inst();
             switch(inst.op) {
@@ -839,7 +874,7 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
                 // do nothing
             } else if(inst.op1.type == Type::Int) {
                 reg_allocator->spill(rvREG::X10);
-                reg_allocator->load(rvREG::X10, inst.op1, time);
+                reg_allocator->load(rvREG::X10, inst.op1, time, 1);
             } else if(inst.op1.type == Type::Float) {
                 reg_allocator->spill(rvFREG::F10);
                 reg_allocator->load(rvFREG::F10, inst.op1, time);
@@ -895,7 +930,7 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
                 goto_inst->op = rvOPCODE::J;
             } else {
                 goto_inst->op = rvOPCODE::BNEZ;
-                goto_inst->rs1 = reg_allocator->getReg(inst.op1, time);
+                goto_inst->rs1 = reg_allocator->getReg(inst.op1, time, 0);
                 // std::cerr << "goto condition:" << toString(goto_inst->rs1) << "\n";
             }
             goto_inst->label = ".L" + std::to_string(get_label_id(time + stoi(inst.des.name)));
@@ -943,15 +978,16 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
 
             // load arguments to a0~a7
             // abi get func parameters
+            // 如果参数个数过多，则spill到栈上，此时不能随便使用a0~a7，因此统一使用t0来存取
             int apr = 10, fapr = 10, stackpr = 0;
             for(int i = 0; i < callinst->argumentList.size(); i++) {
                 Operand op = callinst->argumentList[i];
                 if(op.type == Type::Int || op.type == Type::IntPtr) {
                     if(apr <= 17) {
-                        reg_allocator->load((rvREG) apr, op, time);
+                        reg_allocator->load((rvREG) apr, op, time, 1);
                         apr++;
                     } else {
-                        reg_allocator->load(rvREG::X5, op, time);
+                        reg_allocator->load(rvREG::X5, op, time, 1);
 
                         rv_inst* sw_inst = new rv_inst();
                         sw_inst->op = rvOPCODE::SW;
@@ -1002,7 +1038,7 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
                 rv_inst* mv_inst = new rv_inst();
                 mv_inst->op = rvOPCODE::MOV;
                 mv_inst->rs1 = rvREG::X10;
-                mv_inst->rd = reg_allocator->getReg(inst.des, time);
+                mv_inst->rd = reg_allocator->getReg(inst.des, time, 0);
                 rv_insts->push_back(mv_inst);
                 // reg_allocator->reg2op_map[(int) rvREG::X10] = inst.des;
                 // reg_allocator->op2reg_map[inst.des] = rvREG::X10;
@@ -1029,8 +1065,8 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
         case Operator::eq: {
             // des = op1 == 0
 
-            rvREG rs1 = reg_allocator->getReg(inst.op1, time);
-            rvREG rd = reg_allocator->getReg(inst.des, time);
+            rvREG rs1 = reg_allocator->getReg(inst.op1, time, 1);
+            rvREG rd = reg_allocator->getReg(inst.des, time, 0);
 
             rv_inst *op_inst = new rv_inst();
             switch(inst.op) {

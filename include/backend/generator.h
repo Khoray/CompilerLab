@@ -69,15 +69,26 @@ public:
 
     void spill(rvREG r);
     void spill(rvFREG r);
-    void load(rvREG r, ir::Operand op, int time);
+    void load(rvREG r, ir::Operand op, int time, int needload);
     void load(rvFREG r, ir::Operand op, int time);
 
-    rv::rvREG getReg(ir::Operand, int time);
+    rv::rvREG getReg(ir::Operand, int time, int needload);
     rv::rvFREG fgetReg(ir::Operand, int time);
 
     void clearregs();
 };
 
+struct FloatConstTable {
+    std::ofstream &fout;
+    std::map<float, std::string> float_const_to_string_map;
+
+    std::string add_float_const(float f);
+
+    std::string find_float_const(float f);
+
+    void gen_rodata();
+    FloatConstTable(std::ofstream &);
+};
 
 struct Generator {
     const ir::Program& program;         // the program to gen
@@ -85,6 +96,7 @@ struct Generator {
 
     Generator(ir::Program&, std::ofstream&);
 
+    FloatConstTable *float_const_table;
     regAllocator *reg_allocator;
     std::vector<rv_inst*> *rv_insts;
     std::vector<int> *goto_label_lines;
