@@ -639,7 +639,7 @@ void backend::Generator::gen_func(const Function& func) {
     int apr = 10, fapr = 10, stackpr = 0;
     for(int i = 0; i < func.ParameterList.size(); i++) {
         Operand op = func.ParameterList[i];
-        if(op.type == Type::Int || op.type == Type::IntPtr) {
+        if(op.type == Type::Int || op.type == Type::IntPtr || op.type == Type::FloatPtr) {
             if(apr <= 17) {
                 reg_allocator->reg2op_map[apr] = op;
                 reg_allocator->op2reg_map[op] = (rvREG) apr;
@@ -735,7 +735,10 @@ void backend::Generator::gen_func(const Function& func) {
             // break;
         }
         Instruction* inst = func.InstVec[i];
-        // std::cerr << inst->draw() << "\n";
+        std::cerr << inst->draw() << "\n";
+        if(inst->op == Operator::call) {
+            int b = 1;
+        }
         gen_instr(*inst, i);
     }
 
@@ -1109,7 +1112,12 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
         case Operator::call: {
             CallInst *callinst = (CallInst*) &inst;
             // TODO: 这里不应该是-8，因为有Int和Float，但是测试点没有
-            max_call_overflow_paras = std::max(max_call_overflow_paras, (int) callinst->argumentList.size() - 8);
+            int intcnt = 0, floatcnt = 0;
+            for(Operand op : callinst->argumentList) {
+                if(op.type == Type::Int) intcnt++;
+                else floatcnt++;
+            }
+            max_call_overflow_paras = std::max(max_call_overflow_paras, std::max(intcnt - 8, 0) + std::max(floatcnt - 8, 0));
 
             // store all temp
             std::vector<rvREG> store_regs;

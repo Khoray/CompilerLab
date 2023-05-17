@@ -875,7 +875,12 @@ void frontend::Analyzer::AnalyzeStmt(Stmt* root) {
             current_func->addInst(new Instruction(op1, op2, des, Operator::store));
             restore_tmp();
         } else {
-            Operand op1 = Operand(exp->v, exp->t);
+            Operand op1;
+            if(exp->t == Type::FloatLiteral || exp->t == Type::IntLiteral) {
+                op1 = convert_type(Operand(exp->v, exp->t), lval->t == Type::Int ? Type::IntLiteral : Type::FloatLiteral);
+            } else {
+                op1 = convert_type(Operand(exp->v, exp->t), lval->t == Type::Int ? Type::Int : Type::Float);
+            }
             Operand op2 = Operand();
             Operand des = Operand(symbol_table.get_scoped_name(lval->v), lval->t);
             current_func->addInst(new Instruction(op1, op2, des, lval->t == Type::Int ? Operator::mov : Operator::fmov));
