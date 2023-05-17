@@ -32,6 +32,8 @@ map<std::string,ir::Function*>* frontend::get_lib_funcs() {
         {"putfloat", new Function("putfloat", {Operand("f", Type::Float)}, Type::null)},
         {"putarray", new Function("putarray", {Operand("n", Type::Int), Operand("arr", Type::IntPtr)}, Type::null)},
         {"putfarray", new Function("putfarray", {Operand("n", Type::Int), Operand("arr", Type::FloatPtr)}, Type::null)},
+        {"starttime", new Function("starttime", {}, Type::null)},
+        {"stoptime", new Function("stoptime", {}, Type::null)}
     };
     return &lib_funcs;
 }
@@ -288,7 +290,6 @@ void frontend::Analyzer::addFRelInst(Operand op1, Operand op2, Operand des, Toke
     switch(op) {
         case TokenType::EQL: {
             insert_inst(new Instruction(op1, op2, des, Operator::feq));
-            insert_inst(new Instruction(des, Operand("0", Type::IntLiteral), des, Operator::feq));
         } break;
 
         case TokenType::NEQ: {
@@ -423,14 +424,17 @@ void frontend::Analyzer::AnalyzeConstInitVal(int &index, STE& ste, int res, int 
             AnalyzeConstInitVal(index, ste, res / ste.dimension[level], level + 1, (ConstInitVal*) root->children[ptr]);
             ptr += 2;
         }
-        for(; index < init_index + res; index++) {
-            Operand op1 = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
-            Operand op2 = Operand(std::to_string(index), Type::IntLiteral);
-            Operand des = Operand("0", ste.operand.type == Type::IntPtr ? Type::IntLiteral : Type::FloatLiteral);
-            store_tmp();
-            des = literal_to_var(des);
-            insert_inst(new Instruction(op1, op2, des, Operator::store));
-            restore_tmp();
+        // 只有局部数组才会赋0
+        if(current_func != nullptr) {
+            for(; index < init_index + res; index++) {
+                Operand op1 = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
+                Operand op2 = Operand(std::to_string(index), Type::IntLiteral);
+                Operand des = Operand("0", ste.operand.type == Type::IntPtr ? Type::IntLiteral : Type::FloatLiteral);
+                store_tmp();
+                des = literal_to_var(des);
+                insert_inst(new Instruction(op1, op2, des, Operator::store));
+                restore_tmp();
+            }
         }
     } else {
         // calc constexp val
@@ -548,14 +552,17 @@ void frontend::Analyzer::AnalyzeInitVal(int& index, STE& ste, int res, int level
             AnalyzeInitVal(index, ste, res / ste.dimension[level], level + 1, (InitVal*) root->children[ptr]);
             ptr += 2;
         }
-        for(; index < init_index + res; index++) {
-            Operand op1 = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
-            Operand op2 = Operand(std::to_string(index), Type::IntLiteral);
-            Operand des = Operand("0", ste.operand.type == Type::IntPtr ? Type::IntLiteral : Type::FloatLiteral);
-            store_tmp();
-            des = literal_to_var(des);
-            insert_inst(new Instruction(op1, op2, des, Operator::store));
-            restore_tmp();
+        // 只有局部数组才会赋0
+        if(current_func != nullptr) {
+            for(; index < init_index + res; index++) {
+                Operand op1 = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
+                Operand op2 = Operand(std::to_string(index), Type::IntLiteral);
+                Operand des = Operand("0", ste.operand.type == Type::IntPtr ? Type::IntLiteral : Type::FloatLiteral);
+                store_tmp();
+                des = literal_to_var(des);
+                insert_inst(new Instruction(op1, op2, des, Operator::store));
+                restore_tmp();
+            }
         }
     } else {
         // calc constexp val
