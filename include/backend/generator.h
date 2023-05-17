@@ -21,9 +21,9 @@ struct operandCmp {
     bool operator() (const ir::Operand& a, const ir::Operand& b) const;
 };
 struct stackVarMap {
-    const std::vector<ir::GlobalVal> &globalVal;
     std::map<ir::Operand, int, operandCmp> _table;
     int offset; // offset to s0
+    const std::vector<ir::GlobalVal> &globalVal;
 
     stackVarMap(const std::vector<ir::GlobalVal> &gb);
 
@@ -44,12 +44,11 @@ struct stackVarMap {
 
 class regAllocator {
 public:
-    std::vector<rv::rv_inst*> &rv_insts;
     std::map<ir::Operand, rvREG, operandCmp> op2reg_map;
     std::map<ir::Operand, rvFREG, operandCmp> fop2freg_map;
     std::vector<ir::Operand> reg2op_map;
     std::vector<ir::Operand> freg2fop_map;
-
+    
     std::set<rvREG> available_regs;
     std::set<rvFREG> available_fregs;
     // LRU Cache
@@ -57,6 +56,7 @@ public:
     std::set<std::pair<int, rvFREG>> freg_using;
     std::vector<int> reg_timestamp;
     std::vector<int> freg_timestamp;
+    std::vector<rv::rv_inst*> &rv_insts;
 
     stackVarMap stack_var_map;
 public:

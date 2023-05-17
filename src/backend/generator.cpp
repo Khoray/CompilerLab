@@ -36,7 +36,7 @@ string rv::toString(rvFREG r) {
     if(r >= rvFREG::F12 && r <= rvFREG::F17) return "fa" + std::to_string((int) r - 10);
     if(r >= rvFREG::F18 && r <= rvFREG::F27) return "fs" + std::to_string((int) r - 16);
     if(r >= rvFREG::F28 && r <= rvFREG::F31) return "ft" + std::to_string((int) r - 25);
-    cerr << "rv freg tostring:" << (int) r << "\n";
+    cerr << "rv freg tostring:" << (int) r << "\n";// debug info
     assert(0 && "invalid r");
 }
 
@@ -153,7 +153,7 @@ string rv::toString(rvOPCODE op) {
     case rvOPCODE::FMOV:
         return "fmv.s";
     default:
-       std::cerr << (int) op << "\n";
+        std::cerr << (int) op << "\n";// debug info
         assert(0 && "gg");
         break;
     }
@@ -637,7 +637,7 @@ void backend::Generator::gen_func(const Function& func) {
 
     // abi get func parameters
     int apr = 10, fapr = 10, stackpr = 0;
-    for(int i = 0; i < func.ParameterList.size(); i++) {
+    for(int i = 0; i <  (int) func.ParameterList.size(); i++) {
         Operand op = func.ParameterList[i];
         if(op.type == Type::Int || op.type == Type::IntPtr || op.type == Type::FloatPtr) {
             if(apr <= 17) {
@@ -698,7 +698,7 @@ void backend::Generator::gen_func(const Function& func) {
 
 
     // unique goto labels
-    for(int i = 0; i < func.InstVec.size(); i++) {
+    for(int i = 0; i <  (int) func.InstVec.size(); i++) {
         Instruction* inst = func.InstVec[i];
         
         if(inst->op == Operator::_goto) {
@@ -710,7 +710,7 @@ void backend::Generator::gen_func(const Function& func) {
     
     // gen insts
     max_call_overflow_paras = 0;
-    for(int i = 0; i < func.InstVec.size(); i++) {
+    for(int i = 0; i <  (int) func.InstVec.size(); i++) {
         int label_id = -1;
         if((label_id = get_label_id(i)) != -1) {
             // store all temp
@@ -735,10 +735,7 @@ void backend::Generator::gen_func(const Function& func) {
             // break;
         }
         Instruction* inst = func.InstVec[i];
-        std::cerr << inst->draw() << "\n";
-        if(inst->op == Operator::call) {
-            int b = 1;
-        }
+        // std::cerr << inst->draw() << "\n";
         gen_instr(*inst, i);
     }
 
@@ -760,7 +757,7 @@ void backend::Generator::gen_func(const Function& func) {
         }
     }
 
-    for(int i = 0; i < rv_insts->size(); i++) {
+    for(int i = 0; i <  (int) rv_insts->size(); i++) {
 //    std::cerr<< "\t.size\t" << rv_insts->size() << "now:" << i << "\n";
 //    std::cerr << "\t" << (*rv_insts)[i]->draw() << "\n";
         if((*rv_insts)[i]->is_label) {
@@ -1139,7 +1136,7 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
             // abi get func parameters
             // 如果参数个数过多，则spill到栈上，此时不能随便使用a0~a7，因此统一使用t0来存取
             int apr = 10, fapr = 10, stackpr = 0;
-            for(int i = 0; i < callinst->argumentList.size(); i++) {
+            for(int i = 0; i <  (int) callinst->argumentList.size(); i++) {
                 Operand op = callinst->argumentList[i];
                 if(op.type == Type::Int || op.type == Type::IntPtr || op.type == Type::FloatPtr) {
                     if(apr <= 17) {
@@ -1188,6 +1185,8 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
                     break;
                 }
             }
+            string funcnames = inst.op1.name;
+            cerr << "funcname:" << funcnames << "\n";
             if(!foundFunction) {
                 calledFunction = *frontend::get_lib_funcs()->find(inst.op1.name)->second;
             }
@@ -1295,7 +1294,7 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
         } break;
 
         default:
-            std::cerr << "Operatorid:" << (int) inst.op << "\n";
+            std::cerr << "Operatorid:" << (int) inst.op << "\n";// debug info
             assert(0 && "invalid operator");
             break;
     }
