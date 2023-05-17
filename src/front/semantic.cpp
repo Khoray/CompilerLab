@@ -585,7 +585,7 @@ void frontend::Analyzer::AnalyzeInitVal(int& index, STE& ste, int res, int level
                 restore_tmp();
             } else {
                 Operand des = Operand(ch->v, ste.operand.type == Type::IntPtr ? Type::Int : Type::Float);
-                insert_inst(new Instruction(op1, op1, des, Operator::store));
+                insert_inst(new Instruction(op1, op2, des, Operator::store));
             }
             index++;
         } else {
