@@ -152,6 +152,8 @@ string rv::toString(rvOPCODE op) {
         return "fmul.s";
     case rvOPCODE::FMOV:
         return "fmv.s";
+    case rvOPCODE::NOP:
+        return "nop";
     default:
         std::cerr << (int) op << "\n";// debug info
         assert(0 && "gg");
@@ -279,6 +281,8 @@ string rv::rv_inst::draw() const {
     case rvOPCODE::FMOV:
         ret += toString(frd) + ", " + toString(frs1);
         break;
+    case rvOPCODE::NOP:
+        break;
     default:
 //        std::cerr << (int) op << "\n";
         assert(0 && "gg");
@@ -306,6 +310,7 @@ int backend::stackVarMap::add_operand(Operand op, uint32_t size) {
     // store in spill
     // only alloc
     offset -= size;
+    // cerr << "add operator:" << op.name << " offset:" << offset << "\n";
     _table[op] = offset;
     return offset;
 }
@@ -628,7 +633,7 @@ void backend::Generator::gen() {
 
 void backend::Generator::gen_func(const Function& func) {
     fout << "\t.align\t1\n\t.global\t" + func.name + "\n\t.type\t" + func.name + ", @function\n" + func.name + ":\n";
-    
+    // cerr << "func:" << func.name << '\n';
     rv_insts = new std::vector<rv_inst*>();
     reg_allocator = new regAllocator(*rv_insts, program.globalVal);
     goto_label_lines = new std::vector<int>();
@@ -664,6 +669,10 @@ void backend::Generator::gen_func(const Function& func) {
         }
     }
 
+    rv_inst *nop1_inst = new rv_inst();
+    nop1_inst->op = rvOPCODE::NOP;
+    rv_insts->push_back(nop1_inst);
+
     // sp -= frame size
     rv_inst *spsub_inst = new rv_inst();
     spsub_inst->op = rvOPCODE::ADDI;
@@ -671,6 +680,10 @@ void backend::Generator::gen_func(const Function& func) {
     spsub_inst->rs1 = rvREG::X2;
     // sp = sp + ?
     rv_insts->push_back(spsub_inst);
+
+    rv_inst *nop2_inst = new rv_inst();
+    nop2_inst->op = rvOPCODE::NOP;
+    rv_insts->push_back(nop2_inst);
     
     // save ra
     rv_inst *svra_inst = new rv_inst();
@@ -707,6 +720,22 @@ void backend::Generator::gen_func(const Function& func) {
     }
     std::sort(ngoto_label_lines.begin(), ngoto_label_lines.end());
     ngoto_label_lines.erase(std::unique(ngoto_label_lines.begin(), ngoto_label_lines.end()), ngoto_label_lines.end());
+
+    // prepare all temps
+    for(int i = 0; i <  (int) func.InstVec.size(); i++) {
+        Instruction* inst = func.InstVec[i];
+        if(inst->op != Operator::call) {
+            if(inst->op1.name != "null" && inst->op1.type != Type::IntLiteral && inst->op1.type != Type::FloatLiteral) {
+                reg_allocator->stack_var_map.find_operand(inst->op1);
+            }
+            if(inst->op2.name != "null" && inst->op2.type != Type::IntLiteral && inst->op2.type != Type::FloatLiteral) {
+                reg_allocator->stack_var_map.find_operand(inst->op2);
+            }
+            if(inst->des.name != "null" && inst->des.type != Type::IntLiteral && inst->des.type != Type::FloatLiteral) {
+                reg_allocator->stack_var_map.find_operand(inst->des);
+            }
+        }
+    }
     
     // gen insts
     max_call_overflow_paras = 0;
@@ -743,17 +772,68 @@ void backend::Generator::gen_func(const Function& func) {
     if((reg_allocator->stack_var_map.offset - max_call_overflow_paras * 4) % 8 != 0) {
         max_call_overflow_paras++;
     }
+    
     spadd_inst->imm = -(spsub_inst->imm = reg_allocator->stack_var_map.offset - max_call_overflow_paras * 4);
-    svra_inst->imm = spadd_inst->imm - 4;
-    svs0_inst->imm = spadd_inst->imm - 8;
+    if(spadd_inst->imm < 2048) {
+        svra_inst->imm = spadd_inst->imm - 4;
+        svs0_inst->imm = spadd_inst->imm - 8;
 
-    for(rv_inst* reti : *ret_set) {
-        if(reti->rd == rvREG::X2) {
-            reti->imm = spadd_inst->imm;
-        } else if(reti->rd == rvREG::X8) {
-            reti->imm = spadd_inst->imm - 8;
-        } else {
-            reti->imm = spadd_inst->imm - 4;
+        for(rv_inst* reti : *ret_set) {
+            if(reti->rd == rvREG::X2) {
+                reti->imm = spadd_inst->imm;
+            } else if(reti->rd == rvREG::X8) {
+                reti->imm = spadd_inst->imm - 8;
+            } else {
+                reti->imm = spadd_inst->imm - 4;
+            }
+        }
+    } else {
+        nop1_inst->op = rvOPCODE::LI;
+        nop1_inst->rd = rvREG::X31;
+        nop1_inst->imm = spadd_inst->imm;
+
+        nop2_inst->op = rvOPCODE::ADD;
+        nop2_inst->rd = rvREG::X30;
+        nop2_inst->rs1 = rvREG::X31;
+        nop2_inst->rs2 = rvREG::X2;
+
+        spsub_inst->op = rvOPCODE::SUB;
+        spsub_inst->rs2 = rvREG::X31;
+
+        svra_inst->imm = -4;
+        svra_inst->rs1 = rvREG::X30;
+        svs0_inst->imm = -8;
+        svs0_inst->rs1 = rvREG::X30;
+
+        spadd_inst->op = rvOPCODE::ADD;
+        spadd_inst->rs2 = rvREG::X31;
+
+        for(rv_inst* reti : *ret_set) {
+            if(reti->op == rvOPCODE::NOP) {
+                if(reti->label == "1") {
+                    reti->label = "";
+                    reti->op = rvOPCODE::LI;
+                    reti->rd = rvREG::X31;
+                    reti->imm = spadd_inst->imm;
+                } else {
+                    reti->label = "";
+                    reti->op = rvOPCODE::ADD;
+                    reti->rd = rvREG::X30;
+                    reti->rs1 = rvREG::X31;
+                    reti->rs2 = rvREG::X2;
+                }
+                continue;
+            }
+            if(reti->rd == rvREG::X2) {
+                reti->op = rvOPCODE::ADD;
+                reti->rs2 = rvREG::X31;
+            } else if(reti->rd == rvREG::X8) {
+                reti->imm = -8;
+                reti->rs1 = rvREG::X30;
+            } else {
+                reti->imm = -4;
+                reti->rs1 = rvREG::X30;
+            }
         }
     }
 
@@ -785,7 +865,17 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
             addi_inst->op = rvOPCODE::ADDI;
             addi_inst->rd = r;
             addi_inst->rs1 = rvREG::X8;
-            addi_inst->imm = reg_allocator->stack_var_map.offset + 4;
+            addi_inst->imm = reg_allocator->stack_var_map.offset; // 这里默认getReg不会产生位移
+            if(addi_inst->imm >= 2048) {
+                rv_inst* li_inst = new rv_inst();
+                li_inst->op = rvOPCODE::LI;
+                li_inst->rd = rvREG::X31;
+                li_inst->imm = reg_allocator->stack_var_map.offset; // 这里默认getReg不会产生位移
+
+                rv_insts->push_back(li_inst);
+                addi_inst->op = rvOPCODE::ADD;
+                addi_inst->rs2 = rvREG::X31;
+            }
             rv_insts->push_back(addi_inst);
         } break;
 
@@ -1040,6 +1130,18 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
                 rv_insts->push_back(lw_inst);
             }
             
+            rv_inst *nop1_inst = new rv_inst();
+            nop1_inst->op = rvOPCODE::NOP;
+            rv_insts->push_back(nop1_inst);
+            nop1_inst->label = "1";
+            ret_set->insert(nop1_inst);
+
+            rv_inst *nop2_inst = new rv_inst();
+            nop2_inst->op = rvOPCODE::NOP;
+            rv_insts->push_back(nop2_inst);
+            nop2_inst->label = "2";
+            ret_set->insert(nop2_inst);
+
             // save s0
             rv_inst *lds0_inst = new rv_inst();
             lds0_inst->op = rvOPCODE::LW;
@@ -1186,7 +1288,7 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
                 }
             }
             string funcnames = inst.op1.name;
-            cerr << "funcname:" << funcnames << "\n";
+            // cerr << "funcname:" << funcnames << "\n";
             if(!foundFunction) {
                 calledFunction = *frontend::get_lib_funcs()->find(inst.op1.name)->second;
             }

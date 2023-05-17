@@ -195,7 +195,11 @@ bool frontend::DFA::next(char input, Token& buf) {
             cur_state = State::Empty;
             break;
         
-        case CharType::Ident: // only when hex or oct
+        case CharType::Ident: // only when hex or oct or 1e-6P
+            if(input == 'e' && cur_str.find("x") == std::string::npos) {
+                cur_state = State::FloatLiteral;
+                break;
+            }
             cur_state = State::IntLiteral;
             break;
         
@@ -217,6 +221,10 @@ bool frontend::DFA::next(char input, Token& buf) {
             break;
         
         case CharType::Op:
+            if(input == '-') {
+                cur_state = State::FloatLiteral;
+                break;
+            }
             ope = 0b11;
             cur_state = State::op;
             break;

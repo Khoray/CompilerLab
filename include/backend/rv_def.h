@@ -95,6 +95,8 @@ enum class rvOPCODE {
 
     // Pseudo Instructions
     LA, LI, MOV, FMOV, J, CALL,                                         // ...
+
+    NOP,
 };
 std::string toString(rvOPCODE r);  // implement this in ur own way
 
