@@ -566,9 +566,9 @@ void frontend::Analyzer::AnalyzeInitVal(int& index, STE& ste, int res, int level
             AnalyzeInitVal(index, ste, res / ste.dimension[level], level + 1, (InitVal*) root->children[ptr]);
             ptr += 2;
         }
-        // 只有局部数组才会赋0
-        if(current_func != nullptr) {
-            for(; index < init_index + res; index++) {
+        for(; index < init_index + res; index++) {
+            if(current_func != nullptr) {
+            // 只有局部数组才会赋0
                 Operand op1 = Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type);
                 Operand op2 = Operand(std::to_string(index), Type::IntLiteral);
                 Operand des = Operand("0", ste.operand.type == Type::IntPtr ? Type::IntLiteral : Type::FloatLiteral);
