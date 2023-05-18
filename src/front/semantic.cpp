@@ -71,7 +71,7 @@ frontend::STE frontend::SymbolTable::get_ste(string id) const {
     return STE();
 }
 
-frontend::Analyzer::Analyzer(): tmp_cnt(0), tmp_f_cnt(0), symbol_table(), current_func(nullptr) {
+frontend::Analyzer::Analyzer(): tmp_cnt(0), tmp_f_cnt(0), tmp_p_cnt(0), tmp_fp_cnt(0), symbol_table(), current_func(nullptr) {
     ScopeInfo si;
     si.cnt = 0;
     si.name = "g";
@@ -100,9 +100,19 @@ std::string frontend::Analyzer::get_tmp_f_var() {
     return "f" + std::to_string(tmp_f_cnt++);
 }
 
+std::string frontend::Analyzer::get_tmp_fp_var() {
+    return "fp" + std::to_string(tmp_fp_cnt++);
+}
+
+std::string frontend::Analyzer::get_tmp_p_var() {
+    return "p" + std::to_string(tmp_p_cnt++);
+}
+
 void frontend::Analyzer::store_tmp() {
     tmp_stack.push_back(tmp_cnt);
     tmp_f_stack.push_back(tmp_f_cnt);
+    tmp_p_stack.push_back(tmp_p_cnt);
+    tmp_fp_stack.push_back(tmp_fp_cnt);
 }
 
 void frontend::Analyzer::restore_tmp() {
@@ -110,6 +120,10 @@ void frontend::Analyzer::restore_tmp() {
     tmp_stack.pop_back();
     tmp_f_cnt = tmp_f_stack.back();
     tmp_f_stack.pop_back();
+    tmp_p_cnt = tmp_p_stack.back();
+    tmp_p_stack.pop_back();
+    tmp_fp_cnt = tmp_fp_stack.back();
+    tmp_fp_stack.pop_back();
 }
 
 Operand frontend::Analyzer::literal_to_var(Operand op) {
@@ -923,6 +937,7 @@ void frontend::Analyzer::AnalyzeLVal(LVal* root, int needload) {
         // case1.1 and case2.1
         // root->v 
         std::string tmp_int = get_tmp_var(), tmp_float = get_tmp_f_var();
+        std::string tmp_p_int = get_tmp_p_var(), tmp_fp_float = get_tmp_fp_var();
         // root->v = get_tmp_var(); 先不赋值
         root->t = ste.operand.type == Type::IntPtr ? Type::Int : Type::Float;
         std::string index = get_tmp_var();
@@ -948,6 +963,30 @@ void frontend::Analyzer::AnalyzeLVal(LVal* root, int needload) {
                 Instruction *mulInst = new Instruction(Operand(index, Type::Int), Operand(tmp, Type::Int), Operand(index, Type::Int), Operator::mul);
                 current_func->addInst(mulInst);
             }
+        }
+        if(((int) root->children.size()) / 3 != (int) ste.dimension.size()) {
+            // 数组维数不一样说明这是一个指针，只会在unaryexp->indent(xxxxx) 中调用函数的时候出现，并且不需要load出来
+            for(int i = (int) root->children.size() - 2; (i + 1) / 3 < (int) ste.dimension.size(); i += 3) {
+                Instruction *movInst2 = new Instruction(Operand(std::to_string(ste.dimension[(i + 1) / 3]), Type::IntLiteral), Operand(), Operand(tmp, Type::Int), Operator::mov);
+                current_func->addInst(movInst2);
+
+                Instruction *mulInst = new Instruction(Operand(index, Type::Int), Operand(tmp, Type::Int), Operand(index, Type::Int), Operator::mul);
+                current_func->addInst(mulInst);
+            }
+            if(ste.operand.type == Type::IntPtr) {
+                root->is_computable = false;
+                root->t = Type::IntPtr;
+                root->v = tmp_p_int;
+            } else {
+                root->is_computable = false;
+                root->t = Type::FloatPtr;
+                root->v = tmp_fp_float;
+            }
+            Instruction *getptr = new Instruction(Operand(symbol_table.get_scoped_name(ste.operand.name), ste.operand.type), Operand(index, Type::Int), Operand(root->v, root->t), Operator::getptr);
+            current_func->addInst(getptr);
+
+            restore_tmp();
+            return;
         }
         if(needload) { 
             if(ste.operand.type == Type::IntPtr) {
@@ -1042,6 +1081,8 @@ void frontend::Analyzer::AnalyzePrimaryExp(PrimaryExp* root) {
         AnalyzeLVal(lval, 1);
         if(lval->t == Type::IntLiteral || lval->t == Type::FloatLiteral || lval->t == Type::IntPtr || lval->t == Type::FloatPtr) {
             COPY_EXP_NODE(lval, root); 
+            // no restore
+            return;
         } else if(lval->t == Type::Int) {
             root->v = tmp_int;
             // 现在只有int

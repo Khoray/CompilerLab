@@ -879,6 +879,34 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
             rv_insts->push_back(addi_inst);
         } break;
 
+        case Operator::getptr: {
+            rv_inst* mv_inst = new rv_inst();
+            mv_inst->op = rvOPCODE::MOV;
+            mv_inst->rd = rvREG::X31;
+            mv_inst->rs1 = reg_allocator->getReg(inst.op2, time, 1);
+            rv_insts->push_back(mv_inst);
+
+            rv_inst* slli_inst = new rv_inst();
+            slli_inst->op = rvOPCODE::SLLI;
+            slli_inst->rd = rvREG::X31;
+            slli_inst->rs1 = rvREG::X31;
+            slli_inst->imm = 2;
+            rv_insts->push_back(slli_inst);
+
+            // add rd, rs, rt
+            rvREG rs1 = reg_allocator->getReg(inst.op1, time, 1);
+            rvREG rs2 = rvREG::X31;
+            rvREG rd = reg_allocator->getReg(inst.des, time, 0);
+
+            rv_inst *op_inst = new rv_inst();
+            op_inst->op = rvOPCODE::ADD;
+            op_inst->rs1 = rs1;
+            op_inst->rs2 = rs2;
+            op_inst->rd = rd;
+            // add rd, rs1, rs2
+            rv_insts->push_back(op_inst);
+        } break;
+
         case Operator::load: {
             // TODO: add float case
             // assert(inst.op1.type == Type::IntPtr);

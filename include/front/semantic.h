@@ -94,6 +94,8 @@ struct SymbolTable{
 struct Analyzer {
     int tmp_cnt;
     int tmp_f_cnt;
+    int tmp_p_cnt;
+    int tmp_fp_cnt;
     vector<ir::Instruction*> g_init_inst;
     SymbolTable symbol_table;
     ir::Function* current_func;
@@ -102,6 +104,8 @@ struct Analyzer {
     vector<Stmt*> last_while;
     vector<int> tmp_stack;
     vector<int> tmp_f_stack;
+    vector<int> tmp_p_stack;
+    vector<int> tmp_fp_stack;
 
     /**
      * @brief constructor
@@ -109,6 +113,8 @@ struct Analyzer {
     Analyzer();
     std::string get_tmp_f_var();
     std::string get_tmp_var();
+    std::string get_tmp_fp_var();
+    std::string get_tmp_p_var();
     
     void store_tmp();
     void restore_tmp();
