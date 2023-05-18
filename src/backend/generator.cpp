@@ -392,6 +392,25 @@ void backend::regAllocator::spill(rvREG r) {
     }
     // sw r, pos(s0)
     if(!(pos == INT32_MAX && (operand.type == Type::IntPtr || operand.type == Type::FloatPtr))) {
+        if(pos != INT32_MAX) {
+            if((int) store_inst->imm >= 2048 || (int) store_inst->imm < -2048) {
+                rv_inst* li_inst = new rv_inst();
+                li_inst->op = rvOPCODE::LI;
+                li_inst->rd = rvREG::X31;
+                li_inst->imm = store_inst->imm;
+                rv_insts.push_back(li_inst);
+
+                rv_inst* add_inst = new rv_inst();
+                add_inst->op = rvOPCODE::ADD;
+                add_inst->rd = rvREG::X31;
+                add_inst->rs1 = rvREG::X31;
+                add_inst->rs2 = rvREG::X8;
+                rv_insts.push_back(add_inst);
+
+                store_inst->imm = 0;
+                store_inst->rs1 = rvREG::X31;
+            }
+        }
         rv_insts.push_back(store_inst);
     }
 
@@ -417,6 +436,25 @@ void backend::regAllocator::spill(rvFREG r) {
         store_inst->symbol = operand.name;
     }
     // fsw r, pos(s0)
+    if(pos != INT32_MAX) {
+        if((int) store_inst->imm >= 2048 || (int) store_inst->imm < -2048) {
+            rv_inst* li_inst = new rv_inst();
+            li_inst->op = rvOPCODE::LI;
+            li_inst->rd = rvREG::X31;
+            li_inst->imm = store_inst->imm;
+            rv_insts.push_back(li_inst);
+
+            rv_inst* add_inst = new rv_inst();
+            add_inst->op = rvOPCODE::ADD;
+            add_inst->rd = rvREG::X31;
+            add_inst->rs1 = rvREG::X31;
+            add_inst->rs2 = rvREG::X8;
+            rv_insts.push_back(add_inst);
+
+            store_inst->imm = 0;
+            store_inst->rs1 = rvREG::X31;
+        }
+    }
     rv_insts.push_back(store_inst);
 
     available_fregs.insert(r);
@@ -463,6 +501,25 @@ void backend::regAllocator::load(rvREG r, ir::Operand op, int time, int needload
             }
         }
         if(needload) {
+            if(pos != INT32_MAX) {
+                if((int) load->imm >= 2048 || (int) load->imm < -2048) {
+                    rv_inst* li_inst = new rv_inst();
+                    li_inst->op = rvOPCODE::LI;
+                    li_inst->rd = rvREG::X31;
+                    li_inst->imm = load->imm;
+                    rv_insts.push_back(li_inst);
+
+                    rv_inst* add_inst = new rv_inst();
+                    add_inst->op = rvOPCODE::ADD;
+                    add_inst->rd = rvREG::X31;
+                    add_inst->rs1 = rvREG::X31;
+                    add_inst->rs2 = rvREG::X8;
+                    rv_insts.push_back(add_inst);
+
+                    load->imm = 0;
+                    load->rs1 = rvREG::X31;
+                }
+            }
             rv_insts.push_back(load);
         }
     }
@@ -500,7 +557,28 @@ void backend::regAllocator::load(rvFREG r, ir::Operand op, int time, int needloa
         if(pos == INT32_MAX) {
             load->symbol = op.name;
         }
-        if(needload) rv_insts.push_back(load);
+        if(needload) {
+            if(pos != INT32_MAX) {
+                if((int) load->imm >= 2048 || (int) load->imm < -2048) {
+                    rv_inst* li_inst = new rv_inst();
+                    li_inst->op = rvOPCODE::LI;
+                    li_inst->rd = rvREG::X31;
+                    li_inst->imm = load->imm;
+                    rv_insts.push_back(li_inst);
+
+                    rv_inst* add_inst = new rv_inst();
+                    add_inst->op = rvOPCODE::ADD;
+                    add_inst->rd = rvREG::X31;
+                    add_inst->rs1 = rvREG::X31;
+                    add_inst->rs2 = rvREG::X8;
+                    rv_insts.push_back(add_inst);
+
+                    load->imm = 0;
+                    load->rs1 = rvREG::X31;
+                }
+            }
+            rv_insts.push_back(load);
+        }
     }
 }
 
@@ -951,7 +1029,6 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
         } break;
 
         case Operator::store: {
-            // TODO: add float case
             // assert(inst.op1.type == Type::IntPtr);
             /*
             mv t6, op2
@@ -1002,6 +1079,24 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
                     sw_inst->rs2 = reg_allocator->getReg(inst.des, time, 1);
                 }
                 sw_inst->imm = stoi(inst.op2.name) * 4;
+                if((int) sw_inst->imm >= 2048 || (int) sw_inst->imm < -2048) {
+                    // 不一定是从s0开始的
+                    rv_inst* li_inst = new rv_inst();
+                    li_inst->op = rvOPCODE::LI;
+                    li_inst->rd = rvREG::X31;
+                    li_inst->imm = sw_inst->imm;
+                    rv_insts->push_back(li_inst);
+
+                    rv_inst* add_inst = new rv_inst();
+                    add_inst->op = rvOPCODE::ADD;
+                    add_inst->rd = rvREG::X31;
+                    add_inst->rs1 = rvREG::X31;
+                    add_inst->rs2 = sw_inst->rs1;
+                    rv_insts->push_back(add_inst);
+
+                    sw_inst->imm = 0;
+                    sw_inst->rs1 = rvREG::X31;
+                }
                 rv_insts->push_back(sw_inst);
             }
         } break;
