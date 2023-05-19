@@ -366,10 +366,10 @@ void backend::regAllocator::update(rv::rvREG r, int time) {
 
 void backend::regAllocator::update(rv::rvFREG r, int time) {
     auto it = freg_using.find(std::make_pair(freg_timestamp[(int) r], r));
-    freg_using.erase(it);
     // r should in using
     assert(it != freg_using.end());
 
+    freg_using.erase(it);
     freg_timestamp[(int) r] = time;
     freg_using.emplace(time, r);
 }
@@ -628,7 +628,6 @@ rvFREG backend::regAllocator::fgetReg(Operand op, int time, int needload) {
     rvFREG r;
     int last_time;
     std::tie(last_time, r) = *freg_using.begin();
-    freg_using.erase(freg_using.begin());
     spill(r);
     
     // load to r
@@ -1375,6 +1374,25 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
                         sw_inst->rs2 = rvREG::X5;
                         sw_inst->rs1 = rvREG::X2;
                         sw_inst->imm = stackpr * 4;
+                        if((int) sw_inst->imm >= 2048 || (int) sw_inst->imm < -2048) {
+                            // 不一定是从s0开始的
+                            rv_inst* li_inst = new rv_inst();
+                            li_inst->op = rvOPCODE::LI;
+                            li_inst->rd = rvREG::X31;
+                            li_inst->imm = sw_inst->imm;
+                            rv_insts->push_back(li_inst);
+
+                            rv_inst* add_inst = new rv_inst();
+                            add_inst->op = rvOPCODE::ADD;
+                            add_inst->rd = rvREG::X31;
+                            add_inst->rs1 = rvREG::X31;
+                            add_inst->rs2 = sw_inst->rs1;
+                            rv_insts->push_back(add_inst);
+
+                            sw_inst->imm = 0;
+                            sw_inst->rs1 = rvREG::X31;
+                        }
+
                         rv_insts->push_back(sw_inst);
 
                         reg_allocator->spill(rvREG::X5);
@@ -1387,8 +1405,37 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
                         reg_allocator->load((rvFREG) fapr, op, time, 1);
                         fapr++;
                     } else {
-                        // assume not go to here
-                        TODO;
+                        reg_allocator->load(rvFREG::F5, op, time, 1);
+
+                        rv_inst* sw_inst = new rv_inst();
+                        sw_inst->op = rvOPCODE::FSW;
+                        sw_inst->frs2 = rvFREG::F5;
+                        sw_inst->rs1 = rvREG::X2;
+                        sw_inst->imm = stackpr * 4;
+                        if((int) sw_inst->imm >= 2048 || (int) sw_inst->imm < -2048) {
+                            // 不一定是从s0开始的
+                            rv_inst* li_inst = new rv_inst();
+                            li_inst->op = rvOPCODE::LI;
+                            li_inst->rd = rvREG::X31;
+                            li_inst->imm = sw_inst->imm;
+                            rv_insts->push_back(li_inst);
+
+                            rv_inst* add_inst = new rv_inst();
+                            add_inst->op = rvOPCODE::ADD;
+                            add_inst->rd = rvREG::X31;
+                            add_inst->rs1 = rvREG::X31;
+                            add_inst->rs2 = sw_inst->rs1;
+                            rv_insts->push_back(add_inst);
+
+                            sw_inst->imm = 0;
+                            sw_inst->rs1 = rvREG::X31;
+                        }
+
+                        rv_insts->push_back(sw_inst);
+
+                        reg_allocator->spill(rvFREG::F5);
+                        // TODO: optimizer
+
                         stackpr++;
                     }
                 }
@@ -1498,6 +1545,35 @@ void backend::Generator::gen_instr(const Instruction& inst, int time) {
             back_inst->rs1 = rvREG::X31;
             // seqz des, op1
             rv_insts->push_back(op_inst);
+            rv_insts->push_back(back_inst);
+
+        } break;
+
+        case Operator::fneq: {
+            // des = op1 == 0
+
+            rvFREG frs1 = reg_allocator->fgetReg(inst.op1, time, 1);
+            rvFREG frs2 = reg_allocator->fgetReg(inst.op2, time, 1);
+            rvFREG frd = reg_allocator->fgetReg(inst.des, time, 0);
+
+            rv_inst *op_inst = new rv_inst();
+            op_inst->op = rvOPCODE::FEQ;
+            op_inst->frs1 = frs1;
+            op_inst->frs2 = frs2;
+            op_inst->rd = rvREG::X31;
+
+            rv_inst *rev_inst = new rv_inst();
+            rev_inst->op = rvOPCODE::SEQZ;
+            rev_inst->rs1 = rvREG::X31;
+            rev_inst->rd = rvREG::X31;
+
+            rv_inst *back_inst = new rv_inst();
+            back_inst->op = rvOPCODE::FCVTSW;
+            back_inst->frd = frd;
+            back_inst->rs1 = rvREG::X31;
+            // seqz des, op1
+            rv_insts->push_back(op_inst);
+            rv_insts->push_back(rev_inst);
             rv_insts->push_back(back_inst);
 
         } break;

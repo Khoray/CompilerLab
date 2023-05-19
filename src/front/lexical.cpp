@@ -157,7 +157,7 @@ bool frontend::DFA::next(char input, Token& buf) {
             break;
         
         case CharType::FloatDot:
-            cur_state = State::op;
+            cur_state = State::FloatLiteral;
             break;
 
         case CharType::Space:
