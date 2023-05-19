@@ -469,7 +469,8 @@ void frontend::Analyzer::AnalyzeConstInitVal(int &index, STE& ste, int res, int 
             restore_tmp();
             index++;
         } else {
-            ste.operand.name = ((ConstExp*) root->children[0])->v;
+            // ste.operand.name = ((ConstExp*) root->children[0])->v;
+            ste.operand.name = convert_type(Operand(((ConstExp*) root->children[0])->v, ((ConstExp*) root->children[0])->t), ste.operand.type).name;
         }
     }
     restore_tmp();
@@ -1080,7 +1081,7 @@ void frontend::Analyzer::AnalyzePrimaryExp(PrimaryExp* root) {
         LVal* lval = (LVal*) root->children[0];
         AnalyzeLVal(lval, 1);
         if(lval->t == Type::IntLiteral || lval->t == Type::FloatLiteral || lval->t == Type::IntPtr || lval->t == Type::FloatPtr) {
-            COPY_EXP_NODE(lval, root); 
+            COPY_EXP_NODE(lval, root);
             // no restore
             return;
         } else if(lval->t == Type::Int) {
@@ -1120,7 +1121,7 @@ void frontend::Analyzer::AnalyzeUnaryExp(UnaryExp* root) {
                 root->v = root->v == "0" ? "1" : "0";
                 root->t = Type::IntLiteral;
             } else if(unaryOp->op == TokenType::MINU) {
-                if(root->t == Type::Float) {
+                if(root->t == Type::FloatLiteral) {
                     root->v = std::to_string(-std::stof(root->v));
                 } else {
                     root->v = std::to_string(-std::stoi(root->v));
